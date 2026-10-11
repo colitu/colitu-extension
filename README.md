@@ -25,7 +25,7 @@ account, click once, and the browser's traffic leaves through a Colitu server.
   <img src="docs/screenshots/login.png" alt="Sign in" width="24%">
 </p>
 
-**Install:** [colitu.com/download/browser](https://colitu.com/download/browser) · [Releases](../../releases)
+**Install:** [Chrome Web Store](https://chromewebstore.google.com/detail/colitu-vpn/kkmmfmnfmipceknpfognjhjdklnflipf) · [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/colitu-vpn/) · [colitu.com/download/browser](https://colitu.com/download/browser) · [Releases](../../releases)
 
 ## How it works
 
