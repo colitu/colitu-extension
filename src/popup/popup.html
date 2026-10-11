@@ -96,6 +96,16 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
         </button>
       </aside>
+      <aside class="nps" id="nps" role="group" aria-labelledby="nps-question" hidden>
+        <div class="nps-head">
+          <strong id="nps-question" data-i18n="npsQuestion"></strong>
+          <button class="icon-btn notice-close" id="nps-close" type="button" data-i18n-title="noticeClose">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+        <div class="nps-scale" id="nps-scale"></div>
+        <small class="muted" data-i18n="npsScale"></small>
+      </aside>
       <div class="hero">
         <button class="power" id="btn-power" type="button" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg>
@@ -111,8 +121,29 @@
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
       </button>
       <button class="split-line" id="split-line" type="button" hidden></button>
+      <button class="split-line invite-line" id="btn-invite" type="button" data-i18n="inviteEntry" hidden></button>
       <div id="alerts"></div>
       <footer class="foot" id="foot"></footer>
+    </section>
+
+    <!-- Invite a friend -->
+    <section class="view" id="view-invite" hidden>
+      <header class="bar">
+        <button class="icon-btn" data-back type="button" data-i18n-title="back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button>
+        <h2 class="bar-title" data-i18n="inviteEntry"></h2>
+        <span class="bar-space"></span>
+      </header>
+      <p class="muted" id="invite-rule"></p>
+      <div class="card">
+        <label class="field"><span data-i18n="inviteLinkLabel"></span><input id="invite-link" type="text" readonly spellcheck="false" autocomplete="off"></label>
+        <button class="btn primary wide" id="btn-invite-copy" type="button" data-i18n="inviteCopy"></button>
+      </div>
+      <div class="invite-stats">
+        <div><b id="invite-invited">0</b><small data-i18n="inviteInvited"></small></div>
+        <div><b id="invite-valid">0</b><small data-i18n="inviteValid"></small></div>
+        <div><b id="invite-days">0</b><small data-i18n="inviteDays"></small></div>
+      </div>
+      <p class="links"><a href="#" data-open="inviteHow" data-i18n="inviteHow"></a></p>
     </section>
 
     <!-- Paused by the plan's device limit -->
@@ -169,6 +200,7 @@
           <label class="toggle"><span><b data-i18n="ruDirect"></b><small data-i18n="ruDirectHint"></small></span><input type="checkbox" id="set-ru"></label>
           <label class="toggle"><span><b data-i18n="autoConnect"></b></span><input type="checkbox" id="set-auto"></label>
           <label class="toggle"><span><b data-i18n="killSwitch"></b><small data-i18n="killSwitchHint"></small></span><input type="checkbox" id="set-kill"></label>
+          <label class="toggle"><span><b data-i18n="stats"></b><small data-i18n="statsHint"></small></span><input type="checkbox" id="set-stats"></label>
           <p class="muted small" id="incognito-hint" data-i18n="incognitoHint" hidden></p>
         </div>
 

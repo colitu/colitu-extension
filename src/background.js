@@ -10,13 +10,17 @@ import { buildRules, parseSplitList, SPLIT_MAX_CHARS, SPLIT_MODES, splitListTooL
 import { languages, resolveLanguage } from "./lib/i18n.js";
 import { pausedInfo } from "./lib/plan.js";
 import * as notices from "./lib/notices.js";
+import { AUTO_RECHECK_MS, chooseAuto, measurementState } from "./lib/auto.js";
+import * as events from "./lib/events.js";
+import * as survey from "./lib/survey.js";
+import * as referral from "./lib/referral.js";
 
 const REFRESH_ALARM = "colitu-session";
 const LINK_ALARM = "colitu-link";
+const LATENCY_ALARM = "colitu-latency";
 const PLAN_ERRORS = new Set(["QUOTA_EXCEEDED", "ENTITLEMENT_INACTIVE", "ENTITLEMENT_EXPIRED"]);
 // Answers to a 2FA code after which the same challenge can be tried again.
 const MFA_RETRY = new Set(["MFA_INVALID_CODE", "RATE_LIMITED", "NETWORK"]);
-const LOAD_RANK = { low: 0, medium: 1, high: 2 };
 
 // --- listeners that must exist at the top level (MV3 wakes us for them) ---
 
@@ -60,7 +64,20 @@ ext.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 ext.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === REFRESH_ALARM) refreshIfDue().catch(() => {});
   if (alarm.name === LINK_ALARM) pollLink().catch(() => {});
+  if (alarm.name === LATENCY_ALARM) periodic().catch(() => {});
 });
+
+// Firefox: the optional data-collection permission can also be switched in
+// about:addons; the setting follows it.
+if (TARGET === "firefox" && ext.permissions && ext.permissions.onAdded) {
+  const follow = (permissions, on) => {
+    if (permissions && Array.isArray(permissions.data_collection) && permissions.data_collection.includes("technicalAndInteraction")) {
+      setStats(on).catch(() => {});
+    }
+  };
+  ext.permissions.onAdded.addListener((p) => follow(p, true));
+  ext.permissions.onRemoved.addListener((p) => follow(p, false));
+}
 
 ext.runtime.onStartup.addListener(() => {
   startup().catch(() => {});
@@ -68,6 +85,7 @@ ext.runtime.onStartup.addListener(() => {
 
 ext.runtime.onInstalled.addListener(() => {
   ext.alarms.create(REFRESH_ALARM, { periodInMinutes: 30 });
+  ext.alarms.create(LATENCY_ALARM, { periodInMinutes: AUTO_RECHECK_MS / 60000 });
   startup().catch(() => {});
 });
 
@@ -91,8 +109,20 @@ function apiHosts() {
   return [new URL(api.API_BASE).hostname];
 }
 
+async function ensureAlarm(name, minutes) {
+  try {
+    if (!(await ext.alarms.get(name))) ext.alarms.create(name, { periodInMinutes: minutes });
+  } catch {
+    // alarms unavailable: the next start tries again
+  }
+}
+
 async function startup() {
   await ready;
+  await ensureAlarm(REFRESH_ALARM, 30);
+  await ensureAlarm(LATENCY_ALARM, AUTO_RECHECK_MS / 60000);
+  // Measure the servers on start (also fills "Automatic") and send queued events.
+  periodic().catch(() => {});
   const { connection } = await load(["connection"]);
   const s = await loadSettings();
   if (!connection || !(connection.on || connection.blocking)) return;
@@ -110,7 +140,7 @@ async function startup() {
 
 async function state() {
   await ready;
-  const data = await load(["auth", "session", "connection", "status", "link", "pings", "entitlement", "paused"]);
+  const data = await load(["auth", "session", "connection", "status", "link", "pings", "entitlement", "paused", "latency", "lastGood"]);
   const s = await loadSettings();
   const auth = data.auth;
   const mfa = await mfaPending();
@@ -135,6 +165,10 @@ async function state() {
       const sp = splitSettings(s);
       return { mode: sp.mode, count: sp.count };
     })(),
+    // What "Automatic" would pick now (shown under its name).
+    auto: autoInfo(data.session, data.latency, data.lastGood),
+    // The statistics switch as it really works (Firefox: also needs the permission).
+    statsActive: await statsEnabled(),
     blocked: await proxy.controlledByOther(),
     incognito: TARGET === "chrome" ? await ext.extension.isAllowedIncognitoAccess() : null,
   };
@@ -199,7 +233,7 @@ async function handle(msg) {
       await refreshSession();
       return state();
     case "ping":
-      await measurePings();
+      await measureLatency();
       return state();
     case "settings":
       await saveSettings(msg.settings || {});
@@ -223,9 +257,48 @@ async function handle(msg) {
       if (ctx) await notices.clicked({ id: String(msg.id || "").slice(0, 200), report: ctx.report });
       return null;
     }
+    case "referral":
+      return currentReferral();
+    case "survey":
+      return currentSurvey();
+    case "survey-answer": {
+      const score = Number(msg.score);
+      if (!Number.isInteger(score) || score < 0 || score > 10) throw Object.assign(new Error("bad score"), { code: "ERROR" });
+      await survey.answer({ score, platform: TARGET, post: api.surveyAnswer });
+      return null;
+    }
+    case "survey-dismiss":
+      await survey.dismiss({ platform: TARGET, post: api.surveyAnswer });
+      return null;
     default:
       throw Object.assign(new Error("unknown command"), { code: "UNKNOWN_COMMAND" });
   }
+}
+
+// --- invite card and survey ---------------------------------------------------
+
+// The invite card for the popup (or null: off, old panel, offline). Cached for
+// 10 minutes so reopening the popup does not ask again.
+async function currentReferral() {
+  const auth = await api.getAuth();
+  if (!auth || !auth.deviceId) return null;
+  const { referralCache: cache } = await load(["referralCache"]);
+  if (cache && cache.deviceId === auth.deviceId && cache.at <= Date.now() && Date.now() - cache.at < referral.CACHE_MS) return cache.card;
+  let card = null;
+  try {
+    card = referral.parseReferral(await api.referral());
+  } catch {
+    card = null;
+  }
+  await save({ referralCache: { at: Date.now(), deviceId: auth.deviceId, card } });
+  return card;
+}
+
+// "nps" when the survey row should show (checked with the API at most daily).
+async function currentSurvey() {
+  const auth = await api.getAuth();
+  if (!auth || !auth.deviceId) return null;
+  return survey.pending({ fetchSurvey: api.surveyDue });
 }
 
 // --- notices -----------------------------------------------------------------
@@ -403,10 +476,10 @@ async function refreshSession({ reapply = true } = {}) {
       await remove(["paused"]);
       proxy.setTicket(session.ticket);
       await setStatus({ error: null });
-      // "Fastest server" needs pings; measure them now and then in the
-      // background (the proxy hosts are always reached directly).
+      // "Automatic" needs latencies; keep them fresh (the proxy hosts are
+      // always reached directly, see measureLatency).
       const { pingsAt } = await load(["pingsAt"]);
-      if (!pingsAt || Date.now() - pingsAt > 6 * 3600 * 1000) measurePings().catch(() => {});
+      if (!pingsAt || Date.now() - pingsAt > AUTO_RECHECK_MS) measureLatency().catch(() => {});
       const { connection } = await load(["connection"]);
       // Back from a drop: the kill switch lets go as soon as Colitu is on again.
       if (reapply && connection && (connection.on || connection.blocking)) await connect(connection.serverId, { keepSession: true });
@@ -437,30 +510,48 @@ async function refreshSession({ reapply = true } = {}) {
   return sessionInFlight;
 }
 
-function pickChain(servers, serverId, pings) {
-  if (!servers.length) return [];
+// pickChain: the servers to use, first one preferred. A chosen server is the
+// only entry; "auto" asks chooseAuto (lowest fresh latency, Russia excluded,
+// failed ones skipped) and keeps the next best as failover.
+function pickChain(servers, serverId, latency, lastGood) {
+  if (!servers.length) return { chain: [], pick: null };
   if (serverId && serverId !== "auto") {
     const s = servers.find((x) => x.id === serverId);
-    return s ? [s] : [];
+    return { chain: s ? [s] : [], pick: null };
   }
-  const score = (s) => {
-    const p = pings[s.id];
-    return (typeof p === "number" ? p : 400) + LOAD_RANK[s.load || "low"] * 60;
-  };
-  return [...servers].sort((a, b) => score(a) - score(b)).slice(0, 3);
+  const pick = chooseAuto(servers, latency, { lastGood });
+  return { chain: pick ? pick.chain : [], pick };
+}
+
+// autoInfo: what "Automatic" would pick now, for the popup (no secrets).
+function autoInfo(session, latency, lastGood) {
+  const pick = session && session.servers && session.servers.length ? chooseAuto(session.servers, latency, { lastGood }) : null;
+  if (!pick) return null;
+  const s = pick.server;
+  return { id: String(s.id), name: String(s.name ?? ""), country: String(s.country ?? ""), city: String(s.city ?? ""), ms: pick.ms };
 }
 
 async function connect(serverId, { keepSession = false } = {}) {
+  const started = performance.now();
   await ready;
   if (await proxy.controlledByOther()) throw Object.assign(new Error("proxy controlled by another extension"), { code: "PROXY_CONTROLLED" });
-  let { session, pings, paused } = await load(["session", "pings", "paused"]);
+  let { session, paused } = await load(["session", "paused"]);
   // A paused browser asks the API again: it may have been activated elsewhere.
   if (paused && keepSession) throw Object.assign(new Error("device paused"), { code: "DEVICE_OVER_LIMIT" });
   if (!keepSession && (paused || !session || !session.ticket || session.expiresAt - Date.now() < 30 * 60 * 1000)) {
     session = await refreshSession({ reapply: false });
   }
   if (!session || !session.ticket) throw Object.assign(new Error("no session"), { code: "SIGNED_OUT" });
-  const chain = pickChain(session.servers, serverId, pings || {});
+  const auto = !serverId || serverId === "auto";
+  let { latency, lastGood } = await load(["latency", "lastGood"]);
+  latency = latency || {};
+  // First "Automatic" connect with nothing measured yet: measure now, but do
+  // not make the user wait more than 3 s (results that arrive in time count).
+  if (auto && !keepSession && !session.servers.some((x) => measurementState(latency[x.id], Date.now()) === "ok")) {
+    await Promise.race([measureLatency().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
+    latency = { ...latency, ...liveLatency };
+  }
+  const { chain, pick } = pickChain(session.servers, serverId, latency, lastGood);
   if (!chain.length) {
     if (serverId !== "auto" && session.servers.length) return connect("auto", { keepSession });
     throw Object.assign(new Error("no servers"), { code: "NO_SERVERS" });
@@ -468,7 +559,12 @@ async function connect(serverId, { keepSession = false } = {}) {
   const s = await loadSettings();
   const rules = buildRules(s, session.servers, chain[0].country, [new URL(api.API_BASE).hostname]);
   const hops = chain.map((x) => ({ host: x.host, port: x.port }));
-  await proxy.apply(rules, hops, session.ticket);
+  try {
+    await proxy.apply(rules, hops, session.ticket);
+  } catch (err) {
+    track({ kind: "connect", node_id: chain[0].id, outcome: "fail", reason: "other", ms: performance.now() - started, first_try: true, mode: auto ? "auto" : "manual" });
+    throw err;
+  }
   await proxy.setWebRTC(s.webrtc);
   const { connection: previous } = await load(["connection"]);
   const sameServer = previous && previous.on && previous.chain && previous.chain[0] && previous.chain[0].host === hops[0].host;
@@ -484,7 +580,40 @@ async function connect(serverId, { keepSession = false } = {}) {
   });
   await setStatus({ error: null, proxyError: null });
   await paintBadge();
-  if (!sameServer) checkExit().catch(() => {});
+  if (!sameServer) {
+    // Automatic picked a server (not a re-apply of the same one): tell how it
+    // compares with the fastest measured server.
+    if (auto && pick && pick.ms !== null && pick.best) {
+      track({ kind: "choice", node_id: pick.server.id, ms: pick.ms, best_node_id: pick.best.id, best_ms: pick.bestMs, mode: "auto" });
+    }
+    verifyConnection({ node: chain[0].id, auto, started }).catch(() => {});
+  }
+}
+
+// verifyConnection is the first proxied request after turning on (the same
+// check the popup shows as "exit IP"). It decides the "connect" event: ok when
+// the answer came through Colitu, fail otherwise. ms = turning on -> answer.
+async function verifyConnection({ node, auto, started }) {
+  const { lastConnectFail } = await load(["lastConnectFail"]);
+  const firstTry = !(typeof lastConnectFail === "number" && Date.now() - lastConnectFail < 120000);
+  const result = await checkExit();
+  const ms = performance.now() - started;
+  const { connection } = await load(["connection"]);
+  // Turned off or moved to another server meanwhile: nothing to report.
+  if (!connection || !connection.on || !connection.current || String(connection.current.id) !== String(node)) return;
+  if (result.ok) {
+    await remove(["lastConnectFail"]);
+    if (auto) await save({ lastGood: String(node) });
+    track({ kind: "connect", node_id: node, outcome: "ok", ms, first_try: firstTry, mode: auto ? "auto" : "manual" });
+    return;
+  }
+  await save({ lastConnectFail: Date.now() });
+  const { status } = await load(["status"]);
+  const pe = status && status.proxyError;
+  // The proxy's own error (if one just happened) explains it best; else the
+  // failed request; else the API answered around the proxy.
+  const reason = pe && Date.now() - pe.at < 30000 ? events.mapReason(pe.error) : result.error ? events.mapReason(result.error) : "other";
+  track({ kind: "connect", node_id: node, outcome: "fail", reason, ms, first_try: firstTry, mode: auto ? "auto" : "manual" });
 }
 
 // disconnect turns the proxy off. With block (the connection dropped by
@@ -556,7 +685,8 @@ async function announceProtectionOff() {
 async function localSignOut(reason, { block = false } = {}) {
   await disconnect({ block });
   await clearMfa();
-  await remove(["auth", "session", "link", "pings", "pingsAt", "entitlement", "paused"]);
+  await remove(["auth", "session", "link", "pings", "pingsAt", "latency", "lastGood", "entitlement", "paused", "survey", "referralCache", "networkToken", "lastConnectFail", "dropFor"]);
+  await events.clear();
   await setStatus({ error: reason || null, exit: null });
 }
 
@@ -567,7 +697,7 @@ async function signOut() {
 }
 
 // Setting values are checked by type; anything else is ignored.
-const BOOLEAN_SETTINGS = ["webrtc", "ruDirect", "autoConnect", "killSwitch"];
+const BOOLEAN_SETTINGS = ["webrtc", "ruDirect", "autoConnect", "killSwitch", "stats"];
 
 async function saveSettings(patch) {
   const current = await loadSettings();
@@ -586,6 +716,10 @@ async function saveSettings(patch) {
   if (splitListTooLong(parsed)) throw Object.assign(new Error("split list too long"), { code: "SPLIT_TOO_LONG" });
   next.splitList = parsed.entries.join("\n");
   await save({ settings: next });
+  // Turning the statistics off clears everything queued.
+  if (!next.stats) await events.clear();
+  // Only the statistics switch changed: the connection stays as it is.
+  if (Object.keys(patch).every((k) => k === "stats")) return;
   const { connection } = await load(["connection"]);
   if (connection && connection.blocking && !next.killSwitch) {
     // Turning the kill switch off lets traffic out again.
@@ -601,36 +735,194 @@ async function checkExit() {
   try {
     const who = await api.whoami();
     await setStatus({ exit: { ip: who.ip, country: who.country, colitu: Boolean(who.colitu), at: Date.now() } });
-  } catch {
+    return { ok: Boolean(who.colitu) };
+  } catch (err) {
     await setStatus({ exit: null });
+    return { ok: false, error: err };
   }
 }
 
-async function measurePings() {
-  const { session } = await load(["session"]);
-  if (!session) return;
-  const one = async (s) => {
-    const url = `https://${s.host}:${s.port}/`;
-    const timed = async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 4000);
-      const started = performance.now();
-      try {
-        await fetch(url, { method: "HEAD", cache: "no-store", credentials: "omit", signal: controller.signal });
-        return performance.now() - started;
-      } finally {
-        clearTimeout(timer);
-      }
-    };
+// --- latency (for "Automatic") -------------------------------------------------
+//
+// Method: for every server the session lists, a timed HEAD request to
+// https://<host>:<port>/ - the same address the proxy connection uses. The
+// request is no-cors (any HTTP answer, even the proxy's 407, completes it; only
+// a failed connection or TLS handshake rejects) and never follows redirects.
+// A first request pays the TCP + TLS handshake and is not counted; the two
+// that follow reuse the connection, so each is about one round trip, and the
+// smaller one is kept. 4 s per request; a server that answers none is
+// recorded as failed.
+//
+// This never goes through the proxy: the proxy hosts are always DIRECT in the
+// extension's own routing rules (routing.js route()), also while connected. If
+// a host is not in the active rules (a server that appeared after the last
+// connect) or the kill switch is holding traffic back, that server is not
+// measured now and its earlier measurement (valid for 6 h) is reused.
+
+let measuring = null;
+// Results of the run in progress, so a connect that cannot wait still uses them.
+let liveLatency = {};
+
+async function timedHead(url, timeout = 4000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  const started = performance.now();
+  try {
+    await fetch(url, { method: "HEAD", mode: "no-cors", redirect: "manual", cache: "no-store", credentials: "omit", signal: controller.signal });
+    return performance.now() - started;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function pingServer(s) {
+  const url = `https://${s.host}:${s.port}/`;
+  try {
+    await timedHead(url); // handshake, not counted
+  } catch (err) {
+    return { ms: null, error: err };
+  }
+  const times = [];
+  let lastError = null;
+  for (let i = 0; i < 2; i++) {
     try {
-      await timed(); // TLS handshake
-      return [s.id, Math.round(await timed())];
-    } catch {
-      return [s.id, null];
+      times.push(await timedHead(url));
+    } catch (err) {
+      lastError = err;
     }
-  };
-  const results = await Promise.all(session.servers.slice(0, 40).map(one));
-  await save({ pings: Object.fromEntries(results), pingsAt: Date.now() });
+  }
+  return times.length ? { ms: Math.max(1, Math.round(Math.min(...times))) } : { ms: null, error: lastError };
+}
+
+function measureLatency() {
+  if (measuring) return measuring;
+  measuring = (async () => {
+    try {
+      await ready;
+      const { session, latency: old } = await load(["session", "latency"]);
+      if (!session || !session.servers || !session.servers.length) return;
+      // Kill switch engaged: server hosts are blocked like everything else.
+      if (proxy.isBlocking()) return;
+      const active = proxy.current();
+      const direct = active ? new Set(active.rules.servers || []) : null; // null: proxy off, everything is direct
+      const targets = session.servers.slice(0, 40).filter((s) => !direct || direct.has(s.host));
+      const enabled = await statsEnabled();
+      const next = {};
+      for (const s of session.servers) if (old && old[s.id]) next[s.id] = old[s.id];
+      liveLatency = {};
+      await Promise.all(
+        targets.map(async (s) => {
+          const r = await pingServer(s);
+          const record = { ms: r.ms, at: Date.now() };
+          next[s.id] = record;
+          liveLatency[s.id] = record;
+          const reason = r.ms === null ? (r.error && r.error.name === "AbortError" ? "timeout" : events.mapReason(r.error)) : undefined;
+          await events.record({ kind: "probe", node_id: s.id, outcome: r.ms === null ? "fail" : "ok", reason, ms: r.ms }, enabled);
+        }),
+      );
+      const pings = {};
+      for (const [id, rec] of Object.entries(next)) if (measurementState(rec, Date.now()) !== "unknown") pings[id] = rec.ms;
+      await save({ latency: next, pings, pingsAt: Date.now() });
+      await recheckAuto();
+    } finally {
+      measuring = null;
+    }
+  })();
+  return measuring;
+}
+
+// recheckAuto: "Automatic" is on and its server just failed to answer while
+// another one does: connect again, which picks the best one.
+async function recheckAuto() {
+  const { connection, session, latency, lastGood } = await load(["connection", "session", "latency", "lastGood"]);
+  if (!connection || !connection.on || connection.serverId !== "auto" || !connection.current || !session || !session.ticket) return;
+  if (measurementState((latency || {})[connection.current.id], Date.now()) !== "failed") return;
+  const pick = chooseAuto(session.servers, latency, { lastGood });
+  if (pick && pick.ms !== null && pick.server.id !== connection.current.id) await connect("auto", { keepSession: true });
+}
+
+// Every 30 minutes (alarm) and at start: measure, then send queued events.
+async function periodic() {
+  const auth = await api.getAuth();
+  if (!auth || !auth.deviceId) return;
+  await ready;
+  await measureLatency().catch(() => {});
+  await flushEvents().catch(() => {});
+}
+
+// --- anonymous connection statistics -------------------------------------------
+
+// statsEnabled: the switch is on and, in Firefox, the optional data-collection
+// permission is granted (the user can also withdraw it in about:addons).
+async function statsEnabled() {
+  const s = await loadSettings();
+  if (!s.stats) return false;
+  if (TARGET !== "firefox") return true;
+  try {
+    return Boolean(await ext.permissions.contains({ data_collection: ["technicalAndInteraction"] }));
+  } catch {
+    return true; // Firefox before 140 has no data-collection permissions: the switch is the consent
+  }
+}
+
+async function setStats(on) {
+  const s = await loadSettings();
+  if (s.stats === on) return;
+  await save({ settings: { ...s, stats: on } });
+  if (!on) await events.clear();
+}
+
+async function track(event) {
+  try {
+    await events.record(event, await statsEnabled());
+  } catch {
+    // statistics must never break a connection
+  }
+}
+
+// The network token (country + ISP key) comes with GET /servers, not with the
+// session. Read at most once a day, only when a report is about to go out.
+async function networkToken() {
+  const { networkToken: kept } = await load(["networkToken"]);
+  const age = kept && typeof kept.at === "number" ? Date.now() - kept.at : Infinity;
+  if (age < 24 * 3600 * 1000) return kept.token || "";
+  if (!proxy.isBlocking()) {
+    try {
+      const token = await api.networkToken();
+      await save({ networkToken: { token, at: Date.now() } });
+      return token;
+    } catch {
+      // keep going with the old one (if still valid) or none
+    }
+  }
+  return kept && age < events.NETWORK_TOKEN_MAX_AGE_MS ? kept.token || "" : "";
+}
+
+async function flushEvents() {
+  const enabled = await statsEnabled();
+  if (!enabled) return events.clear();
+  const auth = await api.getAuth();
+  if (!auth || !auth.deviceId) return;
+  await events.flush({ enabled, post: api.acEvents, platform: TARGET, appVersion: api.version(), networkToken });
+}
+
+// A proxy that stops working while on: only proxy-level errors count, and only
+// after a check through the proxy fails. One "drop" per connection.
+let dropChecking = false;
+async function maybeDrop(error) {
+  if (dropChecking || !events.isProxyFailure(error)) return;
+  dropChecking = true;
+  try {
+    const { connection, dropFor } = await load(["connection", "dropFor"]);
+    if (!connection || !connection.on || !connection.current || dropFor === connection.since) return;
+    if (Date.now() - connection.since < 20000) return; // still connecting: the connect event covers it
+    const result = await checkExit();
+    if (result.ok) return;
+    await save({ dropFor: connection.since });
+    await track({ kind: "drop", node_id: connection.current.id, reason: events.mapReason(error), minutes: Math.round((Date.now() - connection.since) / 60000) });
+  } finally {
+    dropChecking = false;
+  }
 }
 
 // --- proxy authentication and errors (Chrome) --------------------------------
@@ -658,6 +950,7 @@ async function noteProxyError(error) {
   const { connection } = await load(["connection"]);
   if (!connection || !connection.on) return;
   await setStatus({ proxyError: { error: String(error).slice(0, 120), at: Date.now() } });
+  maybeDrop(error).catch(() => {});
 }
 
 // --- toolbar icon --------------------------------------------------------------

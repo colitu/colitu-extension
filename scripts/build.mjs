@@ -55,7 +55,13 @@ const manifests = {
       gecko: {
         id: "extension@colitu.com",
         strict_min_version: "128.0",
-        data_collection_permissions: { required: ["authenticationInfo", "personallyIdentifyingInfo", "browsingActivity"] },
+        // Anonymous connection statistics (src/lib/events.js) are optional
+        // "technicalAndInteraction" data: off until the user grants it, in the
+        // popup settings or in about:addons.
+        data_collection_permissions: {
+          required: ["authenticationInfo", "personallyIdentifyingInfo", "browsingActivity"],
+          optional: ["technicalAndInteraction"],
+        },
       },
     },
   },

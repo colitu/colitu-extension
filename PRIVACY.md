@@ -33,9 +33,20 @@ devices.
   no activity logs. The traffic volume per device is counted for the plan
   limit (the free plan has 10 GB a month).
 
+- **Anonymous connection statistics (setting “Anonymous connection statistics”):**
+  aggregate connection events (server id, success or failure, a failure reason
+  such as timeout, and times in milliseconds) are queued and sent at most once
+  an hour. They contain no account, device, IP address or visited sites; the
+  server keeps day totals only. On Chrome the setting is on by default; on
+  Firefox it is off until you turn it on (it is the optional
+  “technicalAndInteraction” data permission). Turning it off deletes the queue.
+- **Survey and invite card:** once a day the extension asks whether a short
+  satisfaction question should be shown (your answer is sent with your
+  account, like a support reply); the invite link comes from your account.
+
 ## What the extension does not do
 
-- no analytics, crash reporting, advertising or third-party SDKs;
+- no third-party analytics, crash reporting, advertising or SDKs (the optional anonymous connection statistics below go to Colitu only);
 - no access to page content: no content scripts, no reading or changing pages;
 - no browsing history: requests are routed, not recorded;
 - no remote code: everything the extension runs is in the package.

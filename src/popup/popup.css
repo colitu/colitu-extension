@@ -181,3 +181,18 @@ textarea { resize: vertical; min-height: 64px; font-family: ui-monospace, SFMono
 .toast.bad { background: #3a1513; color: #ffb4ae; }
 .busy { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); }
 .busy span { width: 28px; height: 28px; border-radius: 50%; border: 3px solid rgba(255, 255, 255, 0.2); border-top-color: var(--accent); animation: spin 0.8s linear infinite; }
+
+/* Survey row */
+.nps { display: flex; flex-direction: column; gap: 6px; padding: 10px 6px 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); font-size: 12.5px; }
+.nps-head { display: flex; align-items: flex-start; gap: 8px; }
+.nps-head strong { flex: 1; font-weight: 600; overflow-wrap: anywhere; }
+.nps-scale { display: flex; gap: 3px; padding-right: 6px; }
+.nps-scale button { flex: 1; min-width: 0; height: 28px; padding: 0; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer; }
+.nps-scale button:hover, .nps-scale button:focus-visible { border-color: var(--accent); outline: none; }
+
+/* Invite a friend */
+.invite-stats { display: flex; gap: 8px; }
+.invite-stats div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line); text-align: center; }
+.invite-stats b { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.invite-stats small { color: var(--faint); font-size: 11px; }
+#invite-link { font-size: 12px; }

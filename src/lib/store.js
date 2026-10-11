@@ -1,5 +1,5 @@
 // Thin wrapper over extension storage (local: survives restarts).
-import { ext } from "./target.js";
+import { ext, TARGET } from "./target.js";
 import { migrateSplit, SPLIT_MODES } from "./routing.js";
 
 export async function load(keys) {
@@ -29,6 +29,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   split: "off",
   splitList: "",
   language: "auto",
+  // Anonymous connection statistics (events.js). Chrome: on, with the
+  // explanation in settings. Firefox: off until the user turns it on (it is
+  // an optional "technicalAndInteraction" data-collection permission there).
+  stats: TARGET === "chrome",
 });
 
 export async function settings() {

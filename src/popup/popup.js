@@ -1,9 +1,9 @@
 // Popup: renders the state the background owns and sends it commands.
 // Everything from the network is inserted with textContent, never as HTML.
 
-import { ext } from "../lib/target.js";
+import { ext, TARGET } from "../lib/target.js";
 import { t, tn, setLanguage, language, errorText } from "../lib/i18n.js";
-import { WEB_BASE, APP_BASE, isColituUrl } from "../lib/api.js";
+import { WEB_BASE, APP_BASE, isColituUrl, registerUrl } from "../lib/api.js";
 import { planInfo, noticeText, pausedText } from "../lib/plan.js";
 import { parseSplitList, splitListTooLong } from "../lib/routing.js";
 
@@ -18,7 +18,7 @@ let mfaSending = false;
 
 const LINKS = {
   forgot: () => `${APP_BASE}/forgot-password`,
-  register: () => `${APP_BASE}/register?utm_source=extension`,
+  register: () => registerUrl(),
   account: () => `${APP_BASE}/`,
   devices: () => `${APP_BASE}/devices`,
   pricing: () => `${WEB_BASE}/${language()}/pricing?utm_source=extension`,
@@ -26,6 +26,7 @@ const LINKS = {
   privacy: () => `${WEB_BASE}/${language()}/legal/privacy`,
   source: () => "https://github.com/colitu/extension",
   apps: () => `${WEB_BASE}/${language()}/download?utm_source=extension`,
+  inviteHow: () => "https://colitu.com/invite-friends",
 };
 
 const CITY = {
@@ -144,6 +145,61 @@ function renderNotice() {
   el.hidden = false;
 }
 
+// --- invite card and survey row ----------------------------------------------------
+
+let invite = null; // the card the background parsed, or null (off / unavailable)
+let inviteRequested = false;
+let npsShown = false;
+let npsRequested = false;
+
+async function ask(cmd, extra = {}) {
+  try {
+    const res = await ext.runtime.sendMessage({ cmd, ...extra });
+    return res && res.ok ? res.value : null;
+  } catch {
+    return null;
+  }
+}
+
+function renderInviteEntry() {
+  $("btn-invite").hidden = !invite;
+}
+
+function renderInvite() {
+  if (!invite) return;
+  $("invite-rule").textContent = t("inviteRule", { invitee: invite.inviteeDays, reward: invite.rewardDays });
+  $("invite-link").value = invite.link;
+  $("invite-invited").textContent = String(invite.invited);
+  $("invite-valid").textContent = String(invite.valid);
+  $("invite-days").textContent = String(invite.daysEarned);
+}
+
+async function copyInvite() {
+  if (!invite) return;
+  try {
+    await navigator.clipboard.writeText(invite.link);
+    toast(t("inviteCopied"));
+    return;
+  } catch {
+    // fall through to the selection copy
+  }
+  const input = $("invite-link");
+  input.focus();
+  input.select();
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  }
+  if (copied) toast(t("inviteCopied"));
+  else toast(t("inviteCopyFailed"), true);
+}
+
+function renderNps() {
+  $("nps").hidden = !npsShown;
+}
+
 function open(key) {
   const make = LINKS[key];
   if (make) ext.tabs.create({ url: make() });
@@ -213,6 +269,7 @@ function show(name) {
   const entering = view !== name;
   view = name;
   for (const el of document.querySelectorAll(".view")) el.hidden = el.id !== `view-${name}`;
+  if (name === "invite") renderInvite();
   if (name === "servers") {
     $("in-search").value = "";
     renderServers();
@@ -246,6 +303,10 @@ function render() {
   if (!state.signedIn) {
     notice = null;
     noticeRequested = false;
+    invite = null;
+    inviteRequested = false;
+    npsShown = false;
+    npsRequested = false;
     const needsCode = state.pendingDevice && (view === "verify" || (state.status && state.status.error === "EMAIL_NOT_VERIFIED"));
     show(needsCode ? "verify" : "login");
     const err = state.status && state.status.error;
@@ -254,7 +315,7 @@ function render() {
   }
   if (["login", "link", "verify", "mfa"].includes(view)) view = "main";
   // Paused by the device limit: the paused view replaces the main one.
-  if (state.paused && ["main", "servers"].includes(view)) view = "paused";
+  if (state.paused && ["main", "servers", "invite"].includes(view)) view = "paused";
   if (!state.paused && view === "paused") view = "main";
   renderMain();
   // The background fetches notices at most every 15 minutes; asking once per
@@ -263,6 +324,25 @@ function render() {
     noticeRequested = true;
     noticeCall("notices");
   }
+  // The invite card and the survey: one request each per popup opening (the
+  // background caches the card and asks the survey at most daily).
+  if (!state.paused && !inviteRequested) {
+    inviteRequested = true;
+    ask("referral").then((card) => {
+      invite = card;
+      renderInviteEntry();
+      if (view === "invite") renderInvite();
+    });
+  }
+  if (!state.paused && !npsRequested) {
+    npsRequested = true;
+    ask("survey").then((kind) => {
+      npsShown = kind === "nps";
+      renderNps();
+    });
+  }
+  renderInviteEntry();
+  renderNps();
   renderPaused();
   renderSettings();
   if (view === "servers") renderServers();
@@ -345,6 +425,13 @@ function showLoginError(code) {
   toast(errorText(code), true);
 }
 
+// What "Automatic" would pick now, under its name.
+function autoSub() {
+  const a = state.auto;
+  if (!a || !a.country) return t("fastestSub");
+  return [countryName(a.country), cityName(a.city)].filter(Boolean).join(" · ");
+}
+
 function currentServer() {
   const servers = (state.session && state.session.servers) || [];
   const c = state.connection;
@@ -397,8 +484,9 @@ function renderMain() {
     flag.src = "../icons/on-48.png";
     flag.className = "flag auto";
     $("current-name").textContent = t("fastest");
-    $("current-sub").textContent = t("fastestSub");
-    $("current-ping").textContent = "";
+    $("current-sub").textContent = autoSub();
+    $("current-ping").textContent = state.auto && typeof state.auto.ms === "number" ? pingText(state.auto.ms) : "";
+    $("current-ping").className = pingClass(state.auto && state.auto.ms);
   }
 
   // Split tunneling: how many sites the rule covers; opens the settings.
@@ -527,7 +615,7 @@ function renderServers() {
   const servers = [...((state.session && state.session.servers) || [])];
   const q = $("in-search").value.trim().toLocaleLowerCase(language());
   const selected = state.connection.serverId || "auto";
-  if (!q) list.append(serverButton({ id: "auto", cc: "", title: t("fastest"), sub: t("fastestSub"), current: selected === "auto" }));
+  if (!q) list.append(serverButton({ id: "auto", cc: "", title: t("fastest"), sub: autoSub(), ms: state.auto ? state.auto.ms : undefined, current: selected === "auto" }));
   const rows = servers
     .map((s) => ({ s, name: countryName(s.country), city: cityName(s.city) }))
     .filter((x) => !q || `${x.name} ${x.city} ${x.s.country}`.toLocaleLowerCase(language()).includes(q))
@@ -562,6 +650,7 @@ function renderSettings() {
   $("set-ru").checked = s.ruDirect;
   $("set-auto").checked = s.autoConnect;
   $("set-kill").checked = Boolean(s.killSwitch);
+  $("set-stats").checked = Boolean(state.statsActive);
   for (const mode of ["off", "bypass", "only"]) $(`set-split-${mode}`).checked = (s.split || "off") === mode;
   $("split-field").hidden = (s.split || "off") === "off";
   $("set-split-list").value = s.splitList || "";
@@ -678,6 +767,53 @@ function wire() {
   toggle("set-ru", "ruDirect");
   toggle("set-auto", "autoConnect");
   toggle("set-kill", "killSwitch");
+  $("set-stats").addEventListener("change", async () => {
+    const on = $("set-stats").checked;
+    // Firefox: the statistics are an optional data-collection permission
+    // ("technicalAndInteraction"). It is asked for here, in the click.
+    if (TARGET === "firefox" && ext.permissions) {
+      const wanted = { data_collection: ["technicalAndInteraction"] };
+      try {
+        if (on) {
+          if (!(await ext.permissions.request(wanted))) {
+            $("set-stats").checked = false;
+            return;
+          }
+        } else {
+          await ext.permissions.remove(wanted);
+        }
+      } catch {
+        // Firefox before 140 knows no data-collection permissions: the switch itself is the consent.
+      }
+    }
+    if (await run("settings", { settings: { stats: on } })) toast(t("saved"));
+  });
+  $("btn-invite").addEventListener("click", () => show("invite"));
+  $("btn-invite-copy").addEventListener("click", copyInvite);
+  $("invite-link").addEventListener("focus", () => $("invite-link").select());
+  for (let score = 0; score <= 10; score++) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = String(score);
+    b.setAttribute("aria-label", String(score));
+    b.addEventListener("click", async () => {
+      const res = await ext.runtime.sendMessage({ cmd: "survey-answer", score }).catch(() => null);
+      if (!(res && res.ok)) {
+        // Not sent (offline, rate limit): the row stays so the user can try again.
+        toast(errorText(res && res.error ? res.error.code : "NETWORK"), true);
+        return;
+      }
+      npsShown = false;
+      renderNps();
+      toast(t("npsThanks"));
+    });
+    $("nps-scale").append(b);
+  }
+  $("nps-close").addEventListener("click", async () => {
+    npsShown = false;
+    renderNps();
+    await ask("survey-dismiss");
+  });
   $("block-allow").addEventListener("click", async (e) => {
     e.preventDefault();
     await run("disconnect");

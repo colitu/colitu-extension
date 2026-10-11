@@ -4,6 +4,14 @@ All notable changes to the Colitu VPN browser extension. Release notes in
 Russian, English and Turkish are also at
 <https://docs.colitu.com/changelog/browser>.
 
+## 1.4.0
+
+- **Automatic (fastest) server:** the server list starts with "Automatic", which measures every server directly (not through the proxy) and picks the fastest; servers in Russia are never picked automatically, and a remembered server gives way to one at least 40% and 60 ms faster.
+- **Invite a friend:** a compact invite card with your link, copy button and results.
+- **Anonymous connection statistics:** connection results, failure kinds, drops, server latency and automatic choices as anonymous day totals (no account, device, IP or visited site). On by default in Chrome; in Firefox it is an optional data-collection permission and stays off until you allow it. Turning it off deletes queued data.
+- **Short survey:** at most once a month a one-line 0-10 recommendation question in the popup.
+- Sign-up links are labelled extension:chrome / extension:firefox.
+
 ## 1.3.0
 
 - New setting "Block traffic if the connection drops" (kill switch, off by

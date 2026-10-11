@@ -8,6 +8,12 @@ export const API_BASE = BASE;
 export const WEB_BASE = "https://colitu.com";
 export const APP_BASE = "https://app.colitu.com";
 
+// registerUrl: the "create account" page. src tells the signup source:
+// extension:chrome or extension:firefox.
+export function registerUrl(target = TARGET) {
+  return `${APP_BASE}/register?src=extension:${target === "firefox" ? "firefox" : "chrome"}`;
+}
+
 // isColituUrl: links the API hands out (device link, account pages) are only
 // opened when they are https on colitu.com, so a compromised or spoofed API
 // answer cannot open an arbitrary page in a new tab.
@@ -374,6 +380,36 @@ export async function notices(lang) {
 // contains ":" and is URL-encoded). The answer is 204.
 export async function noticeEvent(id, event) {
   await authorized(`/client/notices/${encodeURIComponent(id)}/events`, { method: "POST", body: { event }, timeout: 10000 });
+}
+
+// referral: the account's invite card (link, rules, results).
+export async function referral() {
+  return authorized("/referral", { timeout: 10000 });
+}
+
+// surveyDue: { survey: { kind } | null }. surveyAnswer posts an answer or a
+// dismissal (see survey.js for the bodies).
+export async function surveyDue() {
+  return authorized("/client/survey", { timeout: 10000 });
+}
+
+export async function surveyAnswer(body) {
+  await authorized("/client/survey", { method: "POST", body, timeout: 10000 });
+}
+
+// acEvents: one anonymous connection-events report (events.js). 202 = accepted.
+export async function acEvents(payload) {
+  await authorized("/client/ac-events", { method: "POST", body: payload, timeout: 15000 });
+}
+
+// networkToken: the signed, opaque network key (country + ISP) that the
+// servers list carries while the request does not come through a Colitu node.
+// The extension's own session answer does not include it, so it is read from
+// GET /servers. Returns "" when the API gives none.
+export async function networkToken() {
+  const data = await authorized("/servers", { timeout: 10000 });
+  const token = data && typeof data.network_token === "string" ? data.network_token : "";
+  return token.length <= 128 ? token : "";
 }
 
 // activateDevice makes this browser the active device when the plan's device
