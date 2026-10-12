@@ -6,6 +6,7 @@ import { t, tn, setLanguage, language, errorText } from "../lib/i18n.js";
 import { WEB_BASE, APP_BASE, isColituUrl, registerUrl } from "../lib/api.js";
 import { planInfo, noticeText, pausedText } from "../lib/plan.js";
 import { parseSplitList, splitListTooLong } from "../lib/routing.js";
+import { cityName as localizeCity } from "../lib/servernames.js";
 
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -27,21 +28,6 @@ const LINKS = {
   source: () => "https://github.com/colitu/extension",
   apps: () => `${WEB_BASE}/${language()}/download?utm_source=extension`,
   inviteHow: () => "https://colitu.com/invite-friends",
-};
-
-const CITY = {
-  talinn: { en: "Tallinn", ru: "Таллин", tr: "Tallinn" },
-  tallinn: { en: "Tallinn", ru: "Таллин", tr: "Tallinn" },
-  "varşova": { en: "Warsaw", ru: "Варшава", tr: "Varşova" },
-  moskova: { en: "Moscow", ru: "Москва", tr: "Moskova" },
-  riga: { en: "Riga", ru: "Рига", tr: "Riga" },
-  frankfurt: { en: "Frankfurt", ru: "Франкфурт", tr: "Frankfurt" },
-  paris: { en: "Paris", ru: "Париж", tr: "Paris" },
-  coventry: { en: "Coventry", ru: "Ковентри", tr: "Coventry" },
-  bursa: { en: "Bursa", ru: "Бурса", tr: "Bursa" },
-  helsinki: { en: "Helsinki", ru: "Хельсинки", tr: "Helsinki" },
-  stockholm: { en: "Stockholm", ru: "Стокгольм", tr: "Stockholm" },
-  londra: { en: "London", ru: "Лондон", tr: "Londra" },
 };
 
 const TAGS = {
@@ -215,9 +201,9 @@ function countryName(cc) {
   }
 }
 
+// The panel's (Turkish) city names in the popup language (lib/servernames.js).
 function cityName(city) {
-  const entry = CITY[String(city || "").toLowerCase()];
-  return entry ? entry[language()] || entry.en : String(city ?? "");
+  return localizeCity(city, language());
 }
 
 function flagSrc(cc) {

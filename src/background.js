@@ -14,6 +14,7 @@ import { AUTO_RECHECK_MS, chooseAuto, measurementState } from "./lib/auto.js";
 import * as events from "./lib/events.js";
 import * as survey from "./lib/survey.js";
 import * as referral from "./lib/referral.js";
+import { displayName } from "./lib/servernames.js";
 
 const REFRESH_ALARM = "colitu-session";
 const LINK_ALARM = "colitu-link";
@@ -980,5 +981,11 @@ async function paintBadge() {
     await ext.action.setBadgeBackgroundColor({ color: blocking ? "#d93a3a" : "#7c6cff" });
     if (ext.action.setBadgeTextColor) await ext.action.setBadgeTextColor({ color: "#ffffff" }).catch(() => {});
   }
-  await ext.action.setTitle({ title: on ? `Colitu VPN — ${connection.current ? String(connection.current.name ?? "") : ""}` : blocking ? "Colitu VPN — traffic blocked" : "Colitu VPN" });
+  // The toolbar tooltip names the server in the extension language.
+  let serverName = "";
+  if (on && connection.current) {
+    const lang = resolveLanguage((await loadSettings().catch(() => ({}))).language);
+    serverName = displayName(connection.current.name, lang, connection.current.country);
+  }
+  await ext.action.setTitle({ title: on ? `Colitu VPN — ${serverName}` : blocking ? "Colitu VPN — traffic blocked" : "Colitu VPN" });
 }
