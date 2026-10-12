@@ -10,11 +10,12 @@ const area = (o) => ({
   set: async (v) => Object.assign(o, structuredClone(v)),
   remove: async (k) => [].concat(k).forEach((x) => delete o[x]),
 });
+const sessionStore = {};
 const ev = () => ({ addListener() {} });
 let onMessage;
 let proxyOn = false;
 globalThis.chrome = {
-  storage: { local: area(local), session: area({}) },
+  storage: { local: area(local), session: area(sessionStore) },
   runtime: { getManifest: () => ({ version: "1.1.0" }), onMessage: { addListener: (f) => (onMessage = f) }, onStartup: ev(), onInstalled: ev() },
   webRequest: { onAuthRequired: ev() },
   proxy: {
@@ -70,7 +71,9 @@ test("connect, then a paused device turns the proxy off", async () => {
   const s = (await send({ cmd: "state" })).value;
   assert.equal(proxyOn, false, "proxy must be off while paused");
   assert.equal(s.connection.on, false);
-  assert.equal(local.session.ticket, "");
+  // The ticket is gone, and it never sat on the disk.
+  assert.equal(local.session.ticket, undefined);
+  assert.equal(sessionStore.sessionTicket, undefined);
   assert.deepEqual(s.paused, { limit: 1, active: [{ id: "dev2", name: "Pixel 8", lastSeenAt: "2026-10-06T09:00:00Z" }], deviceId: "dev1" });
 });
 

@@ -14,6 +14,11 @@ export const SPLIT_MAX = 500;
 export const SPLIT_MAX_CHARS = 20000;
 
 // BLOCK_PROXY never answers: used while the kill switch holds traffic back.
+// It is an HTTPS proxy: the browser opens TLS to it before it sends anything
+// else. Any local program can listen on 127.0.0.1:9, but none holds a
+// trusted certificate for 127.0.0.1, so the handshake fails and neither a
+// request nor the site it is for ever reaches such a listener (a plain HTTP
+// proxy there would receive every request and every CONNECT host name).
 export const BLOCK_PROXY = { host: "127.0.0.1", port: 9 };
 
 // ip4, ip6 and route are copied into the PAC script with
@@ -297,8 +302,8 @@ export function blockRules(apiHosts = API_HOSTS) {
   return { servers: [], bypass: [...apiHosts], mode: "all" };
 }
 
-// blockPacScript sends everything but local addresses and the API to a proxy
-// that never answers, so nothing leaves around Colitu.
+// blockPacScript sends everything but local addresses and the API to an
+// HTTPS proxy that never answers, so nothing leaves around Colitu.
 export function blockPacScript(apiHosts = API_HOSTS) {
   return [
     "var RULES = " + JSON.stringify(blockRules(apiHosts)) + ";",
@@ -307,7 +312,7 @@ export function blockPacScript(apiHosts = API_HOSTS) {
     "var route = " + route.toString() + ";",
     "function FindProxyForURL(url, host) {",
     "  if (route(RULES, host) === 'direct') return 'DIRECT';",
-    `  return 'PROXY ${BLOCK_PROXY.host}:${BLOCK_PROXY.port}';`,
+    `  return 'HTTPS ${BLOCK_PROXY.host}:${BLOCK_PROXY.port}';`,
     "}",
   ].join("\n");
 }

@@ -10,8 +10,10 @@ service as a whole is covered by the privacy policy at
   and the id of this browser as a device on your account;
 - a random device key generated at installation (it identifies this browser
   installation to your account, nothing else);
-- the server list, the current proxy ticket, measured pings, your plan
-  details (when it ends, the next plan, the number of devices);
+- the server list, measured pings, your plan details (when it ends, the
+  next plan, the number of devices);
+- the current proxy ticket, in the browser's session memory only (never on
+  disk; it is gone when the browser closes and a new one is fetched);
 - your settings (WebRTC protection, Russian sites, site lists, language).
 
 Nothing is synchronised to other browsers. Signing out removes the session,
@@ -34,10 +36,13 @@ devices.
   limit (the free plan has 10 GB a month).
 
 - **Anonymous connection statistics (setting “Anonymous connection statistics”):**
-  aggregate connection events (server id, success or failure, a failure reason
-  such as timeout, and times in milliseconds) are queued and sent at most once
-  an hour. They contain no account, device, IP address or visited sites; the
-  server keeps day totals only. On Chrome the setting is on by default; on
+  connection events (server id, success or failure, a failure reason such as
+  timeout, and times in milliseconds) are queued and sent at most once an hour,
+  with a signed code for your network's country and provider. The events
+  contain no account, device, IP address or visited sites. Like every request
+  to the API, the report is sent signed in (that only keeps strangers from
+  writing); the server adds the events to day totals and keeps nothing that
+  links them to your account or device. On Chrome the setting is on by default; on
   Firefox it is off until you turn it on (it is the optional
   “technicalAndInteraction” data permission). Turning it off deletes the queue.
 - **Survey and invite card:** once a day the extension asks whether a short

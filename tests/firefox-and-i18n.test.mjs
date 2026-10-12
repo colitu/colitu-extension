@@ -50,7 +50,8 @@ test("Firefox fails closed: an error while deciding gives an unreachable proxy, 
   assert.throws(() => firefoxDecision("https://example.com/"));
   const d = safeDecision("https://example.com/");
   assert.deepEqual(d, unreachable());
-  assert.equal(d[0].type, "http");
+  // HTTPS: a local program on that port gets a failed TLS handshake, no request
+  assert.equal(d[0].type, "https");
   assert.equal(d[0].host, "127.0.0.1");
   assert.equal(d.some((p) => p.type === "direct"), false);
   // a normal ticket still works through the same entry point

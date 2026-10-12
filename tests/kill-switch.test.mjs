@@ -110,8 +110,8 @@ test("kill switch on: an unintended drop (device limit) blocks traffic instead o
   assert.equal(r.error.code, "DEVICE_OVER_LIMIT");
   assert.ok(isBlockingPac(), "the blocking PAC is installed");
   assert.equal(proxyValue.pacScript.mandatory, true);
-  assert.equal(pac("example.com"), "PROXY 127.0.0.1:9");
-  assert.equal(pac("fi.example.test"), "PROXY 127.0.0.1:9");
+  assert.equal(pac("example.com"), "HTTPS 127.0.0.1:9");
+  assert.equal(pac("fi.example.test"), "HTTPS 127.0.0.1:9");
   assert.equal(pac("api.colitu.com"), "DIRECT", "the API stays reachable to sign in or reconnect");
   assert.equal(pac("192.168.1.10"), "DIRECT");
   assert.equal(pac("localhost"), "DIRECT");

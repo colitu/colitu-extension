@@ -75,9 +75,11 @@ export async function controlledByOther() {
 }
 
 // unreachable is a proxy nothing listens on: a request sent there fails
-// instead of falling back to a direct connection.
+// instead of falling back to a direct connection. HTTPS, so a local program
+// listening on that port gets a failed TLS handshake, never a request
+// (see BLOCK_PROXY).
 export function unreachable() {
-  return [{ type: "http", host: BLOCK_PROXY.host, port: BLOCK_PROXY.port, failoverTimeout: 1 }];
+  return [{ type: "https", host: BLOCK_PROXY.host, port: BLOCK_PROXY.port, failoverTimeout: 1 }];
 }
 
 // safeDecision is what proxy.onRequest runs: any error closes the door

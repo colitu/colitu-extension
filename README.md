@@ -41,7 +41,9 @@ run the app transports (VLESS Reality, XHTTP, Hysteria2). Instead:
 2. It asks the panel for a **proxy ticket** and the server list
    (`POST /api/v1/webproxy/session`). A ticket is a short-lived (≤ 6 h),
    Ed25519-signed statement "this device of this user may use the proxy until
-   …". It is refreshed in the background.
+   …". It is refreshed in the background and kept in session memory only
+   (`storage.session`), never on disk; after a browser restart a new one is
+   fetched.
 3. While connected, the browser talks to an **HTTPS proxy** (TLS, HTTP/2) on
    the chosen node; the ticket is the proxy password. Chrome gets a PAC script
    through `chrome.proxy`; Firefox answers `proxy.onRequest` per request.

@@ -930,10 +930,20 @@ async function maybeDrop(error) {
 const authAttempts = new Map();
 
 async function proxyCredentials(details) {
-  const { session, connection } = await load(["session", "connection"]);
-  if (!session || !session.ticket || !connection || !connection.on) return {};
+  let { session, connection } = await load(["session", "connection"]);
+  if (!session || !connection || !connection.on) return {};
   const host = details.challenger && details.challenger.host;
   if (!(connection.chain || []).some((p) => p.host === host)) return {};
+  if (!session.ticket) {
+    // The ticket lives in memory only (store.js): after a browser restart it
+    // is gone until the API hands out a new one.
+    try {
+      session = await refreshSession({ reapply: false });
+    } catch {
+      return { cancel: true };
+    }
+    if (!session || !session.ticket) return { cancel: true };
+  }
   const tries = (authAttempts.get(details.requestId) || 0) + 1;
   authAttempts.set(details.requestId, tries);
   if (authAttempts.size > 500) authAttempts.clear();

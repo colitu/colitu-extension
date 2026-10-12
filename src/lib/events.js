@@ -2,7 +2,11 @@
 // user has "Anonymous connection statistics" on. The queue lives in extension
 // storage (newest 500), a report goes out at most once an hour with up to 300
 // events. Events carry no account, device, IP or site: only the server id
-// (node id), the protocol ("webproxy"), an outcome, a reason and a time.
+// (node id), the protocol ("webproxy"), an outcome, a reason and a time; the
+// report adds the signed network token (country + provider). The request is
+// signed in like every API call (the token only keeps strangers from
+// writing); the server adds the events to day totals and keeps nothing that
+// links them to the account or device.
 
 import { load, save, remove } from "./store.js";
 

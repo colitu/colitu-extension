@@ -299,9 +299,49 @@ export async function linkPoll(pollToken) {
   return true;
 }
 
+// isPublicV4 is false for addresses that are not on the open internet:
+// this network, private (RFC 1918), loopback, CGNAT, link-local, the IETF
+// and documentation ranges, benchmarking, multicast and reserved (the same
+// list as the iOS app's latency probe).
+function isPublicV4([a, b, c]) {
+  return !(a === 0 || a === 10 || a === 127 || a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113));
+}
+
+// isLocalHost is true for a server host that does not lead to the open
+// internet: localhost, a single-label (intranet) name, a local-only suffix,
+// or an IPv4 address in a non-public range, also when written in a short,
+// octal or hex form ("127.1", "0x7f.0.0.1"), which the browser reads as an
+// address. A spoofed or compromised API answer could otherwise make the
+// extension probe the user's local network and hand the proxy ticket to a
+// local listener.
+export function isLocalHost(host) {
+  const h = String(host || "").toLowerCase().replace(/\.$/, "");
+  if (!h || !h.includes(".")) return true;
+  if (/(^|\.)(localhost|local|lan|home|internal|intranet|localdomain|home\.arpa)$/.test(h)) return true;
+  let canonical;
+  try {
+    canonical = new URL(`https://${h}/`).hostname;
+  } catch {
+    return true;
+  }
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(canonical);
+  if (m) return !isPublicV4(m.slice(1).map(Number));
+  // An all-numeric host that is not a valid address: never a server.
+  return /^[0-9.]+$/.test(h);
+}
+
 // sanitizeServers keeps the servers the API lists that are safe to use: the
 // host goes into the PAC chain and a URL, so it may only be a plain host name
-// or address, and the port must be a real port. Texts are made strings.
+// or address on the open internet, and the port must be a real port. Texts
+// are made strings.
 export function sanitizeServers(list) {
   if (!Array.isArray(list)) return [];
   const out = [];
@@ -310,6 +350,7 @@ export function sanitizeServers(list) {
     const host = typeof s.host === "string" ? s.host.trim().toLowerCase() : "";
     const port = typeof s.port === "number" ? s.port : NaN;
     if (!host || host.length > 253 || !/^[a-z0-9.-]+$/.test(host)) continue;
+    if (isLocalHost(host)) continue;
     if (!Number.isInteger(port) || port < 1 || port > 65535) continue;
     if (s.id === undefined || s.id === null || s.id === "") continue;
     out.push({
