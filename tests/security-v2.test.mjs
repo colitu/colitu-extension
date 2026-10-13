@@ -66,3 +66,13 @@ test("EXT-01: the kill switch sends traffic to an HTTPS proxy, never a plain one
   assert.match(pac, /'HTTPS 127\.0\.0\.1:9'/);
   assert.doesNotMatch(pac, /'PROXY /);
 });
+
+test("E3-04: the disk ticket of 1.4.0 is moved once, before other reads", async () => {
+  local.session = { ticket: "old.ticket", servers: [], refreshAt: 5 };
+  await store.migrateTicket();
+  assert.equal(local.session.ticket, undefined);
+  assert.equal(local.session.refreshAt, 5);
+  assert.equal(memory.sessionTicket, "old.ticket");
+  await store.migrateTicket(); // nothing left to move
+  assert.equal(memory.sessionTicket, "old.ticket");
+});

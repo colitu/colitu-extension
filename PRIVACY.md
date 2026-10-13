@@ -13,7 +13,8 @@ service as a whole is covered by the privacy policy at
 - the server list, measured pings, your plan details (when it ends, the
   next plan, the number of devices);
 - the current proxy ticket, in the browser's session memory only (never on
-  disk; it is gone when the browser closes and a new one is fetched);
+  disk; it is gone when the browser closes; until a new one is fetched,
+  browser traffic is held back, never sent out directly);
 - your settings (WebRTC protection, Russian sites, site lists, language).
 
 Nothing is synchronised to other browsers. Signing out removes the session,

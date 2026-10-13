@@ -49,6 +49,17 @@ async function writeTicket(ticket) {
 
 const wants = (keys, key) => keys === null || keys === undefined || [].concat(keys).includes(key);
 
+// migrateTicket moves a ticket that 1.4.0 kept on disk to session memory.
+// The background calls it once at start, before any other read or write of
+// the session, so it cannot race a session refresh.
+export async function migrateTicket() {
+  const { session } = await ext.storage.local.get(["session"]);
+  if (!session || typeof session !== "object" || !session.ticket) return;
+  const { ticket, ...rest } = session;
+  await writeTicket(ticket);
+  await ext.storage.local.set({ session: rest });
+}
+
 export async function load(keys) {
   const data = await ext.storage.local.get(keys);
   if (wants(keys, "session") && data && data.session && typeof data.session === "object") {

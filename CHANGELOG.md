@@ -4,11 +4,19 @@ All notable changes to the Colitu VPN browser extension. Release notes in
 Russian, English and Turkish are also at
 <https://docs.colitu.com/changelog/browser>.
 
+## 1.4.1
+
+- **Proxy ticket in session memory only:** the short-lived proxy ticket is no longer stored on disk. After a browser restart or an extension update, traffic is held back (as with the kill switch: only local addresses and the Colitu API go direct) until a new ticket arrives, then the connection comes back by itself. Nothing goes out directly in between.
+- **Kill switch:** while it holds traffic back, the browser is pointed at an HTTPS proxy that never answers, so a program listening on that local port can see neither requests nor site names.
+- **Server list checks:** servers on local, private or reserved addresses (localhost, 192.168.x.x, 10.x, link-local and the like, also in short or hex forms) are refused.
+- **Server names in your language:** cities and node names from the panel (sent in Turkish) are shown in the extension's language.
+- **Statistics text:** the setting now says exactly what is sent: connection events (server, success or failure, times) with your network's country and provider as a signed code, in a signed-in request; the server keeps only daily totals, not linked to your account or device, and never records IP addresses or visited sites.
+
 ## 1.4.0
 
 - **Automatic (fastest) server:** the server list starts with "Automatic", which measures every server directly (not through the proxy) and picks the fastest; servers in Russia are never picked automatically, and a remembered server gives way to one at least 40% and 60 ms faster.
 - **Invite a friend:** a compact invite card with your link, copy button and results.
-- **Anonymous connection statistics:** connection results, failure kinds, drops, server latency and automatic choices as anonymous day totals (no account, device, IP or visited site). On by default in Chrome; in Firefox it is an optional data-collection permission and stays off until you allow it. Turning it off deletes queued data.
+- **Anonymous connection statistics:** connection results, failure kinds, drops, server latency and automatic choices, kept by the server as day totals not linked to your account or device (no IP or visited site; see 1.4.1 for the exact wording). On by default in Chrome; in Firefox it is an optional data-collection permission and stays off until you allow it. Turning it off deletes queued data.
 - **Short survey:** at most once a month a one-line 0-10 recommendation question in the popup.
 - Sign-up links are labelled extension:chrome / extension:firefox.
 

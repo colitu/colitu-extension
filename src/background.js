@@ -3,7 +3,7 @@
 // popup only sends commands and renders the state it gets back.
 
 import { ext, TARGET } from "./lib/target.js";
-import { load, save, remove, settings as loadSettings } from "./lib/store.js";
+import { load, save, remove, settings as loadSettings, migrateTicket } from "./lib/store.js";
 import * as api from "./lib/api.js";
 import * as proxy from "./lib/proxy.js";
 import { buildRules, parseSplitList, SPLIT_MAX_CHARS, SPLIT_MODES, splitListTooLong, splitSettings } from "./lib/routing.js";
@@ -94,9 +94,17 @@ const ready = init();
 
 async function init() {
   try {
+    // A ticket 1.4.0 kept on disk moves to session memory before anything
+    // else reads or writes the session.
+    await migrateTicket();
     const { connection, session } = await load(["connection", "session"]);
-    if (connection && connection.on && session) {
+    if (connection && connection.on && session && session.ticket) {
       proxy.remember(connection.rules, connection.chain, session.ticket);
+    } else if (connection && connection.on) {
+      // Connected, but the ticket is gone (it lives in session memory: a
+      // browser restart or an extension update empties it). Hold traffic
+      // back until a new one arrives; startup() fetches it.
+      await holdForTicket();
     } else if (connection && connection.blocking) {
       proxy.rememberBlock(apiHosts());
     }
@@ -104,6 +112,16 @@ async function init() {
     // Nothing stored that we can read: start disconnected.
   }
   await paintBadge().catch(() => {});
+}
+
+// holdForTicket: the proxy needs a ticket this browser no longer has. Until
+// refreshSession() brings a new one (and connect() puts the proxy chain
+// back), traffic is held back exactly like the kill switch: only local
+// addresses and the Colitu API go direct, everything else fails. Nothing
+// leaves directly, and the API request that fetches the ticket never goes
+// to a proxy that would ask for the ticket it is fetching.
+async function holdForTicket() {
+  await proxy.block(apiHosts());
 }
 
 function apiHosts() {
@@ -446,7 +464,7 @@ async function pollLink() {
 async function refreshIfDue() {
   const { session, auth } = await load(["session", "auth"]);
   if (!auth || !auth.deviceId) return;
-  if (!session || Date.now() >= session.refreshAt) await refreshSession();
+  if (!session || !session.ticket || Date.now() >= session.refreshAt) await refreshSession();
 }
 
 let sessionInFlight = null;
@@ -936,14 +954,13 @@ async function proxyCredentials(details) {
   const host = details.challenger && details.challenger.host;
   if (!(connection.chain || []).some((p) => p.host === host)) return {};
   if (!session.ticket) {
-    // The ticket lives in memory only (store.js): after a browser restart it
-    // is gone until the API hands out a new one.
-    try {
-      session = await refreshSession({ reapply: false });
-    } catch {
-      return { cancel: true };
-    }
-    if (!session || !session.ticket) return { cancel: true };
+    // The ticket lives in memory only (store.js) and is gone. Never wait for
+    // it here: the request asking may be the very API call that fetches it.
+    // Hold traffic back (the API then goes direct), fetch a new ticket in
+    // the background; connect() puts the proxy chain back when it arrives.
+    await holdForTicket().catch(() => {});
+    if (!sessionInFlight) refreshSession().catch(() => {});
+    return { cancel: true };
   }
   const tries = (authAttempts.get(details.requestId) || 0) + 1;
   authAttempts.set(details.requestId, tries);

@@ -110,6 +110,11 @@ export function firefoxDecision(url) {
   } catch {
     return unreachable();
   }
+  // No ticket (yet): a node would answer 407. Hold traffic back like the
+  // kill switch until the background has a new one; the API goes direct.
+  if (!active.ticket) {
+    return route(blockRules(active.rules.api || []), host) === "direct" ? { type: "direct" } : unreachable();
+  }
   const r = route(active.rules, host);
   if (r === "direct") return { type: "direct" };
   const header = "Basic " + btoa("colitu:" + (active.ticket || ""));
