@@ -103,9 +103,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   split: "off",
   splitList: "",
   language: "auto",
-  // Anonymous connection statistics (events.js). Chrome: on, with the
+  // Usage statistics (events.js). Chrome: on, with the
   // explanation in settings. Firefox: off until the user turns it on (it is
-  // an optional "technicalAndInteraction" data-collection permission there).
+  // optional data-collection permissions there, events.STATS_DATA_COLLECTION).
   stats: TARGET === "chrome",
 });
 

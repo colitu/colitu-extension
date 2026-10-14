@@ -7,6 +7,7 @@ import { WEB_BASE, APP_BASE, isColituUrl, registerUrl } from "../lib/api.js";
 import { planInfo, noticeText, pausedText } from "../lib/plan.js";
 import { parseSplitList, splitListTooLong } from "../lib/routing.js";
 import { cityName as localizeCity } from "../lib/servernames.js";
+import { STATS_DATA_COLLECTION } from "../lib/events.js";
 
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -439,13 +440,16 @@ function renderMain() {
   power.setAttribute("aria-pressed", String(c.on));
   power.setAttribute("aria-label", c.on ? t("connected") : t("tapToConnect"));
   const title = $("status-title");
-  title.textContent = c.on ? t("connected") : c.blocking ? t("blockedTitle") : t("disconnected");
-  title.className = c.on ? "status-on" : "";
-  $("status-sub").textContent = c.on ? t("tapToDisconnect") : t("tapToConnect");
+  // Connected, but held back until a new proxy ticket arrives (after a
+  // browser restart): nothing goes out yet, so not "connected".
+  const held = Boolean(c.on && state.holding);
+  title.textContent = held ? t("connecting") : c.on ? t("connected") : c.blocking ? t("blockedTitle") : t("disconnected");
+  title.className = c.on && !held ? "status-on" : "";
+  $("status-sub").textContent = held ? t("holdingHint") : c.on ? t("tapToDisconnect") : t("tapToConnect");
 
   const exit = $("exit-line");
   const ex = state.status && state.status.exit;
-  exit.hidden = !c.on;
+  exit.hidden = !c.on || held;
   exit.replaceChildren();
   if (c.on) {
     const label = document.createElement("span");
@@ -755,10 +759,11 @@ function wire() {
   toggle("set-kill", "killSwitch");
   $("set-stats").addEventListener("change", async () => {
     const on = $("set-stats").checked;
-    // Firefox: the statistics are an optional data-collection permission
-    // ("technicalAndInteraction"). It is asked for here, in the click.
+    // Firefox: the statistics are optional data-collection permissions
+    // (technical data, the network's country and provider). They are asked
+    // for here, in the click.
     if (TARGET === "firefox" && ext.permissions) {
-      const wanted = { data_collection: ["technicalAndInteraction"] };
+      const wanted = { data_collection: STATS_DATA_COLLECTION };
       try {
         if (on) {
           if (!(await ext.permissions.request(wanted))) {
@@ -859,5 +864,7 @@ wire();
 setLanguage("auto");
 applyStatic();
 refreshQuiet().then(() => {
-  if (state && state.signedIn && (!state.session || !state.session.plan)) ext.runtime.sendMessage({ cmd: "refresh" }).catch(() => {});
+  // No plan yet, or held back for a new ticket: ask now instead of waiting
+  // for the next scheduled try.
+  if (state && state.signedIn && (!state.session || !state.session.plan || state.holding)) ext.runtime.sendMessage({ cmd: "refresh" }).catch(() => {});
 });

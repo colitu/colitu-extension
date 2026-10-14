@@ -10,6 +10,9 @@ Russian, English and Turkish are also at
 - **Kill switch:** while it holds traffic back, the browser is pointed at an HTTPS proxy that never answers, so a program listening on that local port can see neither requests nor site names.
 - **Server list checks:** servers on local, private or reserved addresses (localhost, 192.168.x.x, 10.x, link-local and the like, also in short or hex forms) are refused.
 - **Server names in your language:** cities and node names from the panel (sent in Turkish) are shown in the extension's language.
+- **Waiting for the ticket:** while traffic is held back, the toolbar badge shows "…" and the popup "Connecting…" instead of the server's country; a new ticket is asked for after 15 s, 30 s, 1 min, 2 min, then every 5 min (and when the popup opens), not only every 30 minutes.
+- **"Usage statistics":** the setting is no longer called "anonymous". In Firefox it asks for the network-location data permission as well (the network's country and provider), next to the technical-data one; it works only when both are allowed.
+- **Reproducible packages:** text files go into the packages with LF line ends on every system, so a package built from the git tag has the same checksum.
 - **Statistics text:** the setting now says exactly what is sent: connection events (server, success or failure, times) with your network's country and provider as a signed code, in a signed-in request; the server keeps only daily totals, not linked to your account or device, and never records IP addresses or visited sites.
 
 ## 1.4.0

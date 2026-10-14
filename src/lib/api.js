@@ -438,7 +438,7 @@ export async function surveyAnswer(body) {
   await authorized("/client/survey", { method: "POST", body, timeout: 10000 });
 }
 
-// acEvents: one anonymous connection-events report (events.js). 202 = accepted.
+// acEvents: one connection-events report (events.js). 202 = accepted.
 export async function acEvents(payload) {
   await authorized("/client/ac-events", { method: "POST", body: payload, timeout: 15000 });
 }

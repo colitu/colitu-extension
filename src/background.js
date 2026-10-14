@@ -19,6 +19,10 @@ import { displayName } from "./lib/servernames.js";
 const REFRESH_ALARM = "colitu-session";
 const LINK_ALARM = "colitu-link";
 const LATENCY_ALARM = "colitu-latency";
+// While traffic is held back for a new proxy ticket (holdForTicket), the
+// ticket is asked for again after 15 s, 30 s, 1 min, 2 min, then every 5 min.
+const TICKET_ALARM = "colitu-ticket";
+const TICKET_RETRY_MS = [15e3, 30e3, 60e3, 120e3, 300e3];
 const PLAN_ERRORS = new Set(["QUOTA_EXCEEDED", "ENTITLEMENT_INACTIVE", "ENTITLEMENT_EXPIRED"]);
 // Answers to a 2FA code after which the same challenge can be tried again.
 const MFA_RETRY = new Set(["MFA_INVALID_CODE", "RATE_LIMITED", "NETWORK"]);
@@ -66,14 +70,16 @@ ext.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === REFRESH_ALARM) refreshIfDue().catch(() => {});
   if (alarm.name === LINK_ALARM) pollLink().catch(() => {});
   if (alarm.name === LATENCY_ALARM) periodic().catch(() => {});
+  if (alarm.name === TICKET_ALARM) retryTicket().catch(() => {});
 });
 
 // Firefox: the optional data-collection permission can also be switched in
 // about:addons; the setting follows it.
 if (TARGET === "firefox" && ext.permissions && ext.permissions.onAdded) {
   const follow = (permissions, on) => {
-    if (permissions && Array.isArray(permissions.data_collection) && permissions.data_collection.includes("technicalAndInteraction")) {
-      setStats(on).catch(() => {});
+    if (permissions && Array.isArray(permissions.data_collection) && permissions.data_collection.some((d) => events.STATS_DATA_COLLECTION.includes(d))) {
+      // On only once every permission of the switch is granted.
+      (on ? statsPermitted() : Promise.resolve(false)).then((all) => setStats(all)).catch(() => {});
     }
   };
   ext.permissions.onAdded.addListener((p) => follow(p, true));
@@ -122,6 +128,62 @@ async function init() {
 // to a proxy that would ask for the ticket it is fetching.
 async function holdForTicket() {
   await proxy.block(apiHosts());
+  scheduleTicketRetry();
+  await paintBadge().catch(() => {});
+}
+
+// holding: connected, but traffic is held back until a ticket arrives.
+async function holding() {
+  const { connection } = await load(["connection"]);
+  return Boolean(connection && connection.on && proxy.isBlocking());
+}
+
+let ticketRetryStep = 0;
+let ticketTimer = null;
+
+// scheduleTicketRetry: the next try for a ticket while traffic is held back,
+// backing off to every 5 minutes. A timer for the short steps; an alarm as
+// well, since the service worker may be stopped before the timer fires
+// (Chrome wakes it for an alarm, at the soonest after 30 s).
+function scheduleTicketRetry() {
+  const delay = TICKET_RETRY_MS[Math.min(ticketRetryStep, TICKET_RETRY_MS.length - 1)];
+  ticketRetryStep++;
+  clearTimeout(ticketTimer);
+  ticketTimer = setTimeout(() => {
+    ticketTimer = null;
+    retryTicket().catch(() => {});
+  }, delay);
+  try {
+    ext.alarms.create(TICKET_ALARM, { when: Date.now() + Math.max(delay, 30e3) });
+  } catch {
+    // alarms unavailable: the timer and the 30-minute refresh remain
+  }
+}
+
+function stopTicketRetry() {
+  ticketRetryStep = 0;
+  clearTimeout(ticketTimer);
+  ticketTimer = null;
+  try {
+    const cleared = ext.alarms.clear(TICKET_ALARM);
+    if (cleared && cleared.catch) cleared.catch(() => {});
+  } catch {
+    // nothing scheduled
+  }
+}
+
+// retryTicket asks for a ticket again while traffic is held back. Success
+// puts the proxy chain back (refreshSession -> connect); a failure waits for
+// the next step. Turned off or signed out meanwhile: nothing left to do.
+async function retryTicket() {
+  if (!(await holding())) {
+    stopTicketRetry();
+    return;
+  }
+  await refreshSession().catch(() => {});
+  if (await holding()) scheduleTicketRetry();
+  else stopTicketRetry();
+  await paintBadge().catch(() => {});
 }
 
 function apiHosts() {
@@ -171,6 +233,8 @@ async function state() {
     email: (auth && auth.email) || "",
     session: data.session ? { servers: data.session.servers, plan: data.session.plan, expiresAt: data.session.expiresAt } : null,
     connection: data.connection || { on: false, serverId: "auto" },
+    // Connected, but traffic is held back until a new proxy ticket arrives.
+    holding: Boolean(data.connection && data.connection.on && proxy.isBlocking()),
     status: data.status || {},
     link: data.link && data.link.expiresAt > Date.now() ? { code: data.link.code, url: data.link.url, expiresAt: data.link.expiresAt } : null,
     // The popup learns that a code is wanted, never the challenge token.
@@ -869,7 +933,7 @@ async function periodic() {
   await flushEvents().catch(() => {});
 }
 
-// --- anonymous connection statistics -------------------------------------------
+// --- usage statistics ------------------------------------------------------------
 
 // statsEnabled: the switch is on and, in Firefox, the optional data-collection
 // permission is granted (the user can also withdraw it in about:addons).
@@ -877,8 +941,13 @@ async function statsEnabled() {
   const s = await loadSettings();
   if (!s.stats) return false;
   if (TARGET !== "firefox") return true;
+  return statsPermitted();
+}
+
+// statsPermitted (Firefox): every data-collection permission of the switch.
+async function statsPermitted() {
   try {
-    return Boolean(await ext.permissions.contains({ data_collection: ["technicalAndInteraction"] }));
+    return Boolean(await ext.permissions.contains({ data_collection: events.STATS_DATA_COLLECTION }));
   } catch {
     return true; // Firefox before 140 has no data-collection permissions: the switch is the consent
   }
@@ -987,15 +1056,18 @@ async function paintBadge() {
   const { connection } = await load(["connection"]);
   const on = Boolean(connection && connection.on);
   const blocking = Boolean(connection && connection.blocking);
+  // Connected, but held back until a ticket arrives: "connecting", not a
+  // country (nothing goes out yet).
+  const held = on && proxy.isBlocking();
   const sizes = [16, 32, 48, 128];
   const path = Object.fromEntries(sizes.map((s) => [s, `icons/${on ? "on" : "off"}-${s}.png`]));
   await ext.action.setIcon({ path }).catch(() => {});
   const cc = on && connection.current && connection.current.country ? String(connection.current.country).toUpperCase() : "";
   // The kill switch holds traffic back: a red "!" instead of a country.
-  const text = blocking ? "!" : cc;
+  const text = blocking ? "!" : held ? "…" : cc;
   await ext.action.setBadgeText({ text });
   if (text) {
-    await ext.action.setBadgeBackgroundColor({ color: blocking ? "#d93a3a" : "#7c6cff" });
+    await ext.action.setBadgeBackgroundColor({ color: blocking ? "#d93a3a" : held ? "#d9902b" : "#7c6cff" });
     if (ext.action.setBadgeTextColor) await ext.action.setBadgeTextColor({ color: "#ffffff" }).catch(() => {});
   }
   // The toolbar tooltip names the server in the extension language.
@@ -1004,5 +1076,12 @@ async function paintBadge() {
     const lang = resolveLanguage((await loadSettings().catch(() => ({}))).language);
     serverName = displayName(connection.current.name, lang, connection.current.country);
   }
-  await ext.action.setTitle({ title: on ? `Colitu VPN — ${serverName}` : blocking ? "Colitu VPN — traffic blocked" : "Colitu VPN" });
+  const title = held
+    ? "Colitu VPN — connecting, traffic held back"
+    : on
+      ? `Colitu VPN — ${serverName}`
+      : blocking
+        ? "Colitu VPN — traffic blocked"
+        : "Colitu VPN";
+  await ext.action.setTitle({ title });
 }

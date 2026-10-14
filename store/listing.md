@@ -77,13 +77,13 @@ Eklenti yalnızca tarayıcı trafiğini korur. Cihazdaki tüm uygulamaları koru
 
 **Remote code:** No. All code is in the package.
 
-**Data usage** (tick): Personally identifiable information (e-mail address for sign-in), Authentication information (password / tokens, sent only to api.colitu.com), Location (only with "Anonymous connection statistics" on: the country and provider of the user's network as a signed code; the server keeps daily totals, not linked to the account or device), Website content and Web history are **not** collected (traffic is routed through the proxy, not recorded; statistics carry no visited sites or IP addresses). Certify: not sold, not used for unrelated purposes, not used for creditworthiness.
+**Data usage** (tick): Personally identifiable information (e-mail address for sign-in), Authentication information (password / tokens, sent only to api.colitu.com), Location (only with "Usage statistics" on: the country and provider of the user's network as a signed code; the server keeps daily totals, not linked to the account or device), Website content and Web history are **not** collected (traffic is routed through the proxy, not recorded; statistics carry no visited sites or IP addresses). Certify: not sold, not used for unrelated purposes, not used for creditworthiness.
 
 ## Firefox Add-ons
 
 **Summary (≤ 250):** Protect your browser with Colitu VPN: one click, servers in 10+ countries, WebRTC leak protection and site lists. Same account as the Colitu apps; 10 GB free every month. Open source.
 
-**Data collection** (declared in the manifest): authenticationInfo, personallyIdentifyingInfo, browsingActivity (traffic passes through Colitu servers while connected; it is not logged).
+**Data collection** (declared in the manifest): required authenticationInfo, personallyIdentifyingInfo, browsingActivity (traffic passes through Colitu servers while connected; it is not logged); optional technicalAndInteraction and locationInfo for "Usage statistics" (connection events and the country and provider of the user's network as a signed code; off until the user allows both; the server keeps daily totals, not linked to the account or device).
 
 **Notes to reviewer:**
 

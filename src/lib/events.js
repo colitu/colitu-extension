@@ -1,5 +1,5 @@
-// Anonymous connection events (POST /client/ac-events), sent only while the
-// user has "Anonymous connection statistics" on. The queue lives in extension
+// Connection events (POST /client/ac-events), sent only while the user has
+// "Usage statistics" on. The queue lives in extension
 // storage (newest 500), a report goes out at most once an hour with up to 300
 // events. Events carry no account, device, IP or site: only the server id
 // (node id), the protocol ("webproxy"), an outcome, a reason and a time; the
@@ -9,6 +9,11 @@
 // links them to the account or device.
 
 import { load, save, remove } from "./store.js";
+
+// Firefox data-collection permissions behind the "Usage statistics" switch:
+// technical data and the network's country and provider (the signed network
+// token). Optional; the switch asks for both and works only with both.
+export const STATS_DATA_COLLECTION = ["technicalAndInteraction", "locationInfo"];
 
 export const QUEUE_CAP = 500;
 export const BATCH_MAX = 300;
