@@ -4,7 +4,7 @@ All notable changes to the Colitu VPN browser extension. Release notes in
 Russian, English and Turkish are also at
 <https://docs.colitu.com/changelog/browser>.
 
-## Unreleased
+## 1.4.2
 
 - **Sign-in tokens in session memory:** the access and refresh tokens are no longer written to disk; they live in the browser's session storage (emptied when the browser closes), so a copied profile or backup holds no token that can be refreshed. After a browser restart you sign in again, unless you turn on the new setting "Stay signed in after the browser restarts", which keeps the refresh token (not the access token) on disk as before. Tokens from older versions move over by themselves.
 
