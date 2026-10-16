@@ -640,6 +640,7 @@ function renderSettings() {
   $("set-ru").checked = s.ruDirect;
   $("set-auto").checked = s.autoConnect;
   $("set-kill").checked = Boolean(s.killSwitch);
+  $("set-keep").checked = Boolean(s.keepSignedIn);
   $("set-stats").checked = Boolean(state.statsActive);
   for (const mode of ["off", "bypass", "only"]) $(`set-split-${mode}`).checked = (s.split || "off") === mode;
   $("split-field").hidden = (s.split || "off") === "off";
@@ -757,6 +758,7 @@ function wire() {
   toggle("set-ru", "ruDirect");
   toggle("set-auto", "autoConnect");
   toggle("set-kill", "killSwitch");
+  toggle("set-keep", "keepSignedIn");
   $("set-stats").addEventListener("change", async () => {
     const on = $("set-stats").checked;
     // Firefox: the statistics are optional data-collection permissions
@@ -855,8 +857,9 @@ function wire() {
     render();
   });
   ext.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local") return;
-    if (["auth", "session", "connection", "status", "link", "pings", "settings", "entitlement", "paused"].some((k) => k in changes)) refreshQuiet();
+    // Tokens live in session memory (store.js): a sign-in changes only them.
+    if (area === "session" ? !("authTokens" in changes) : area !== "local") return;
+    if (["authTokens", "auth", "session", "connection", "status", "link", "pings", "settings", "entitlement", "paused"].some((k) => k in changes)) refreshQuiet();
   });
 }
 

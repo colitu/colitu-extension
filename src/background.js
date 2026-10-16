@@ -3,7 +3,7 @@
 // popup only sends commands and renders the state it gets back.
 
 import { ext, TARGET } from "./lib/target.js";
-import { load, save, remove, settings as loadSettings, migrateTicket } from "./lib/store.js";
+import { load, save, remove, settings as loadSettings, migrateTicket, migrateAuth, applyKeepSignedIn } from "./lib/store.js";
 import * as api from "./lib/api.js";
 import * as proxy from "./lib/proxy.js";
 import { buildRules, parseSplitList, SPLIT_MAX_CHARS, SPLIT_MODES, splitListTooLong, splitSettings } from "./lib/routing.js";
@@ -103,6 +103,8 @@ async function init() {
     // A ticket 1.4.0 kept on disk moves to session memory before anything
     // else reads or writes the session.
     await migrateTicket();
+    // Sign-in tokens that older versions kept on disk move to session memory.
+    await migrateAuth();
     const { connection, session } = await load(["connection", "session"]);
     if (connection && connection.on && session && session.ticket) {
       proxy.remember(connection.rules, connection.chain, session.ticket);
@@ -780,7 +782,7 @@ async function signOut() {
 }
 
 // Setting values are checked by type; anything else is ignored.
-const BOOLEAN_SETTINGS = ["webrtc", "ruDirect", "autoConnect", "killSwitch", "stats"];
+const BOOLEAN_SETTINGS = ["webrtc", "ruDirect", "autoConnect", "killSwitch", "stats", "keepSignedIn"];
 
 async function saveSettings(patch) {
   const current = await loadSettings();
@@ -801,8 +803,10 @@ async function saveSettings(patch) {
   await save({ settings: next });
   // Turning the statistics off clears everything queued.
   if (!next.stats) await events.clear();
-  // Only the statistics switch changed: the connection stays as it is.
-  if (Object.keys(patch).every((k) => k === "stats")) return;
+  // The refresh token goes to disk or off it right away.
+  if ("keepSignedIn" in patch) await applyKeepSignedIn();
+  // Only the statistics or stay-signed-in switch changed: the connection stays as it is.
+  if (Object.keys(patch).every((k) => k === "stats" || k === "keepSignedIn")) return;
   const { connection } = await load(["connection"]);
   if (connection && connection.blocking && !next.killSwitch) {
     // Turning the kill switch off lets traffic out again.
