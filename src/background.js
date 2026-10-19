@@ -233,6 +233,7 @@ async function state() {
     signedIn: Boolean(auth && auth.refresh && auth.deviceId),
     pendingDevice: Boolean(auth && auth.refresh && !auth.deviceId),
     email: (auth && auth.email) || "",
+    company: auth && auth.company && auth.company.name ? { name: String(auth.company.name), role: String(auth.company.role || "member") } : null,
     session: data.session ? { servers: data.session.servers, plan: data.session.plan, expiresAt: data.session.expiresAt } : null,
     connection: data.connection || { on: false, serverId: "auto" },
     // Connected, but traffic is held back until a new proxy ticket arrives.
@@ -558,6 +559,8 @@ async function refreshSession({ reapply = true } = {}) {
       };
       await save({ session });
       if (entitlement && typeof entitlement === "object") await save({ entitlement });
+      // Account e-mail + optional company seat; never blocks the refresh.
+      await api.refreshAccount().catch(() => {});
       await remove(["paused"]);
       proxy.setTicket(session.ticket);
       await setStatus({ error: null });

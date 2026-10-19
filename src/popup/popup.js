@@ -625,6 +625,9 @@ function renderSettings() {
   const s = state.settings;
   const plan = state.session && state.session.plan;
   $("acct-email").textContent = state.email || "";
+  const companyEl = $("acct-company");
+  companyEl.hidden = !(state.company && state.company.name);
+  companyEl.textContent = companyEl.hidden ? "" : t("company", { name: state.company.name });
   $("acct-plan").textContent = plan ? `${t("plan")}: ${plan.traffic_limit_bytes != null ? t("planFree") : t("planPremium")}${plan.expires_at ? " · " + t("until", { date: dateText(plan.expires_at) }) : ""}` : errorText((state.status && state.status.error) || "ENTITLEMENT_INACTIVE");
   const meter = $("acct-meter");
   if (plan && plan.traffic_limit_bytes != null) {

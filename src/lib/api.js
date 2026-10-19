@@ -389,8 +389,20 @@ export async function registerDevice() {
   // carries the device id.
   const bound = await refreshTokens({ ...current, deviceId: device.id });
   await save({ auth: { ...bound, deviceId: device.id, appVersion: version() } });
+  await refreshAccount();
+}
+
+// refreshAccount re-reads /me: the e-mail and the optional company seat
+// (absent = no company, which clears the stored one). A failed request keeps
+// the last known values.
+export async function refreshAccount() {
   const me = await authorized("/me").catch(() => null);
-  if (me && me.email) await save({ auth: { ...(await getAuth()), email: me.email } });
+  if (!me || typeof me !== "object" || !me.email) return;
+  const c = me.company;
+  const company = c && typeof c.name === "string" && c.name ? { name: c.name, role: String(c.role || "member") } : undefined;
+  const current = await getAuth();
+  if (!current || !current.refresh) return;
+  await save({ auth: { ...current, email: me.email, company } });
 }
 
 export async function sendVerification(locale) {
