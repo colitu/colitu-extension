@@ -8,6 +8,7 @@ import { planInfo, noticeText, pausedText } from "../lib/plan.js";
 import { parseSplitList, splitListTooLong } from "../lib/routing.js";
 import { cityName as localizeCity } from "../lib/servernames.js";
 import { STATS_DATA_COLLECTION } from "../lib/events.js";
+import { STORAGE_KEY as GROWTH_KEY, normalize as normalizeGrowth, noteConnected, dismissInvite, dismissReview, inviteCardVisible, reviewCardVisible, reviewUrl, telegramUrl, whatsappUrl } from "../lib/growth.js";
 
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -29,6 +30,7 @@ const LINKS = {
   source: () => "https://github.com/colitu/extension",
   apps: () => `${WEB_BASE}/${language()}/download?utm_source=extension`,
   inviteHow: () => "https://colitu.com/invite-friends",
+  review: () => reviewUrl(TARGET),
 };
 
 const TAGS = {
@@ -138,6 +140,39 @@ let invite = null; // the card the background parsed, or null (off / unavailable
 let inviteRequested = false;
 let npsShown = false;
 let npsRequested = false;
+let inviteResolved = false; // the referral answer is in (or failed): the review card may decide
+let growth = normalizeGrowth(null); // storage.local "growth": connected once, days of use, dismissals
+let growthLoaded = false;
+
+async function loadGrowth() {
+  try {
+    const data = await ext.storage.local.get(GROWTH_KEY);
+    growth = normalizeGrowth(data && data[GROWTH_KEY]);
+  } catch {
+    // storage unavailable: the cards simply stay hidden
+    return;
+  }
+  growthLoaded = true;
+  renderGrowth();
+}
+
+async function saveGrowth(next) {
+  growth = next;
+  renderGrowth();
+  try {
+    await ext.storage.local.set({ [GROWTH_KEY]: next });
+  } catch {
+    // not persisted: the card comes back next time
+  }
+}
+
+// The proxy is on: remember that the extension was connected once and count
+// today as a day of use.
+function noteUse() {
+  if (!growthLoaded) return;
+  const next = noteConnected(growth, Date.now());
+  if (JSON.stringify(next) !== JSON.stringify(growth)) saveGrowth(next);
+}
 
 async function ask(cmd, extra = {}) {
   try {
@@ -148,8 +183,33 @@ async function ask(cmd, extra = {}) {
   }
 }
 
-function renderInviteEntry() {
-  $("btn-invite").hidden = !invite;
+// One growth card at most: the invite card first, the review card after it
+// is snoozed (or when there is no invite programme).
+function renderGrowth() {
+  $("acct-invite").hidden = !invite;
+  const ready = growthLoaded && Boolean(state) && !state.paused;
+  const now = Date.now();
+  const showInvite = ready && inviteCardVisible(growth, Boolean(invite), now);
+  const showReview = ready && inviteResolved && reviewCardVisible(growth, showInvite, now);
+  $("invite-card").hidden = !showInvite;
+  $("review-card").hidden = !showReview;
+  if (showInvite) {
+    const text = $("invite-card-text");
+    text.textContent = invite.inviteeDays ? t("inviteCardBody", { n: invite.inviteeDays }) : "";
+    text.hidden = !invite.inviteeDays;
+  }
+}
+
+function shareBody() {
+  return t("inviteShareBody", { n: invite ? invite.inviteeDays : 0 });
+}
+
+function shareTelegram() {
+  if (invite) ext.tabs.create({ url: telegramUrl(invite.link, shareBody()) });
+}
+
+function shareWhatsapp() {
+  if (invite) ext.tabs.create({ url: whatsappUrl(shareBody(), invite.link) });
 }
 
 function renderInvite() {
@@ -292,6 +352,7 @@ function render() {
     noticeRequested = false;
     invite = null;
     inviteRequested = false;
+    inviteResolved = false;
     npsShown = false;
     npsRequested = false;
     const needsCode = state.pendingDevice && (view === "verify" || (state.status && state.status.error === "EMAIL_NOT_VERIFIED"));
@@ -317,7 +378,8 @@ function render() {
     inviteRequested = true;
     ask("referral").then((card) => {
       invite = card;
-      renderInviteEntry();
+      inviteResolved = true;
+      renderGrowth();
       if (view === "invite") renderInvite();
     });
   }
@@ -328,7 +390,8 @@ function render() {
       renderNps();
     });
   }
-  renderInviteEntry();
+  if (state.connection.on && !state.holding) noteUse();
+  renderGrowth();
   renderNps();
   renderPaused();
   renderSettings();
@@ -785,7 +848,20 @@ function wire() {
     if (await run("settings", { settings: { stats: on } })) toast(t("saved"));
   });
   $("btn-invite").addEventListener("click", () => show("invite"));
+  $("acct-invite").addEventListener("click", (e) => {
+    e.preventDefault();
+    show("invite");
+  });
   $("btn-invite-copy").addEventListener("click", copyInvite);
+  $("card-share-copy").addEventListener("click", copyInvite);
+  for (const id of ["card-share-telegram", "btn-share-telegram"]) $(id).addEventListener("click", shareTelegram);
+  for (const id of ["card-share-whatsapp", "btn-share-whatsapp"]) $(id).addEventListener("click", shareWhatsapp);
+  $("invite-card-close").addEventListener("click", () => saveGrowth(dismissInvite(growth, Date.now())));
+  $("review-card-close").addEventListener("click", () => saveGrowth(dismissReview(growth)));
+  $("review-card-open").addEventListener("click", () => {
+    open("review");
+    saveGrowth(dismissReview(growth)); // asked once; the settings keep a permanent link
+  });
   $("invite-link").addEventListener("focus", () => $("invite-link").select());
   for (let score = 0; score <= 10; score++) {
     const b = document.createElement("button");
@@ -867,6 +943,7 @@ function wire() {
 }
 
 wire();
+loadGrowth();
 setLanguage("auto");
 applyStatic();
 refreshQuiet().then(() => {

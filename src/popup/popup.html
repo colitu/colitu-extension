@@ -121,8 +121,38 @@
         <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
       </button>
       <button class="split-line" id="split-line" type="button" hidden></button>
-      <button class="split-line invite-line" id="btn-invite" type="button" data-i18n="inviteEntry" hidden></button>
       <div id="alerts"></div>
+      <!-- Growth cards: at most one of the two is shown -->
+      <aside class="growth" id="invite-card" role="group" aria-labelledby="invite-card-title" hidden>
+        <div class="growth-head">
+          <button class="growth-body" id="btn-invite" type="button">
+            <strong id="invite-card-title" data-i18n="inviteEntry"></strong>
+            <small id="invite-card-text"></small>
+          </button>
+          <button class="icon-btn notice-close" id="invite-card-close" type="button" data-i18n-title="noticeClose">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+        <div class="share-row">
+          <button class="btn secondary" id="card-share-telegram" type="button" data-i18n="shareTelegram"></button>
+          <button class="btn secondary" id="card-share-whatsapp" type="button" data-i18n="shareWhatsapp"></button>
+          <button class="btn secondary" id="card-share-copy" type="button" data-i18n="inviteCopy"></button>
+        </div>
+      </aside>
+      <aside class="growth" id="review-card" role="group" aria-labelledby="review-card-title" hidden>
+        <div class="growth-head">
+          <div class="growth-body">
+            <strong id="review-card-title" data-i18n="reviewTitle"></strong>
+            <small data-i18n="reviewHint"></small>
+          </div>
+          <button class="icon-btn notice-close" id="review-card-close" type="button" data-i18n-title="noticeClose">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </div>
+        <div class="share-row">
+          <button class="btn secondary" id="review-card-open" type="button" data-i18n="reviewOpen"></button>
+        </div>
+      </aside>
       <footer class="foot" id="foot"></footer>
     </section>
 
@@ -137,6 +167,10 @@
       <div class="card">
         <label class="field"><span data-i18n="inviteLinkLabel"></span><input id="invite-link" type="text" readonly spellcheck="false" autocomplete="off"></label>
         <button class="btn primary wide" id="btn-invite-copy" type="button" data-i18n="inviteCopy"></button>
+        <div class="share-row">
+          <button class="btn secondary" id="btn-share-telegram" type="button" data-i18n="shareTelegram"></button>
+          <button class="btn secondary" id="btn-share-whatsapp" type="button" data-i18n="shareWhatsapp"></button>
+        </div>
       </div>
       <div class="invite-stats">
         <div><b id="invite-invited">0</b><small data-i18n="inviteInvited"></small></div>
@@ -193,6 +227,7 @@
             <a href="#" class="btn secondary" data-open="account" data-i18n="manage"></a>
             <a href="#" class="btn secondary" data-open="pricing" data-i18n="upgrade" id="acct-upgrade"></a>
           </div>
+          <a href="#" id="acct-invite" data-i18n="inviteEntry" hidden></a>
         </div>
 
         <h3 data-i18n="protection"></h3>
@@ -233,6 +268,7 @@
         <div class="card links-card">
           <p class="muted" id="about-version"></p>
           <a href="#" data-open="help" data-i18n="help"></a>
+          <a href="#" data-open="review" data-i18n="reviewRate"></a>
           <a href="#" data-open="privacy" data-i18n="privacy"></a>
           <a href="#" data-open="source" data-i18n="source"></a>
         </div>
