@@ -36,6 +36,10 @@ const common = {
     default_icon: { 16: "icons/off-16.png", 32: "icons/off-32.png", 48: "icons/off-48.png", 128: "icons/off-128.png" },
   },
   host_permissions: ["<all_urls>"],
+  // The website's server map can ask the extension to connect (src/content/site.js).
+  content_scripts: [
+    { matches: ["https://colitu.com/*", "https://www.colitu.com/*"], js: ["content/site.js"], run_at: "document_idle" },
+  ],
   incognito: "spanning",
   content_security_policy: { extension_pages: "script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'" },
 };

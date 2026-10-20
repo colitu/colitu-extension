@@ -15,6 +15,7 @@ import * as events from "./lib/events.js";
 import * as survey from "./lib/survey.js";
 import * as referral from "./lib/referral.js";
 import { displayName } from "./lib/servernames.js";
+import { pickSiteServer } from "./lib/site.js";
 
 const REFRESH_ALARM = "colitu-session";
 const LINK_ALARM = "colitu-link";
@@ -58,7 +59,12 @@ if (TARGET === "chrome") {
   ext.proxy.onError.addListener((e) => noteProxyError(e && e.message));
 }
 
-ext.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // The website's server map (content script on colitu.com): plain result, no envelope.
+  if (message && message.type === "site-connect") {
+    siteConnect(message, sender).then(sendResponse, () => sendResponse({ ok: false, reason: "error" }));
+    return true;
+  }
   handle(message || {}).then(
     (value) => sendResponse({ ok: true, value }),
     (err) => sendResponse({ ok: false, error: { code: err.code || "ERROR", message: String(err.message || err) } }),
@@ -596,6 +602,44 @@ async function refreshSession({ reapply = true } = {}) {
     }
   })();
   return sessionInFlight;
+}
+
+// siteConnect: "Connect to this server" on colitu.com. Only the content script
+// of the two colitu.com origins may ask. The answer carries no secrets.
+const SITE_ORIGINS = ["https://colitu.com", "https://www.colitu.com"];
+
+async function siteConnect(msg, sender) {
+  let origin = "";
+  try {
+    origin = new URL(sender && sender.url).origin;
+  } catch {
+    origin = "";
+  }
+  if (!sender || !sender.tab || !SITE_ORIGINS.includes(origin)) return { ok: false, reason: "forbidden" };
+  const country = String(msg.country ?? "");
+  const city = String(msg.city ?? "").slice(0, 64);
+  if (!/^[a-z]{2}$/i.test(country)) return { ok: false, reason: "error", country, city };
+  await ready;
+  const { auth, session } = await load(["auth", "session"]);
+  if (!(auth && auth.refresh && auth.deviceId) || !session || !Array.isArray(session.servers) || !session.servers.length) {
+    return { ok: false, reason: "signed-out", country, city };
+  }
+  const server = pickSiteServer(session.servers, country, city);
+  if (!server) return { ok: false, reason: "unavailable", country, city };
+  let code = "";
+  try {
+    await connect(server.id);
+  } catch (err) {
+    code = String((err && err.code) || "ERROR");
+  }
+  const { connection, status } = await load(["connection", "status"]);
+  const on = Boolean(connection && connection.on);
+  if (code === "SIGNED_OUT") return { ok: false, reason: "signed-out", country, city };
+  let reason = "";
+  if (!on) reason = String(code || (status && status.error) || "error").toLowerCase().replace(/_/g, "-");
+  const lang = resolveLanguage((await loadSettings().catch(() => ({}))).language);
+  const cur = on && connection.current ? connection.current : server;
+  return { ok: on, reason, country, city: String(cur.city ?? server.city ?? ""), name: displayName(cur.name ?? server.name, lang, cur.country ?? server.country) };
 }
 
 // pickChain: the servers to use, first one preferred. A chosen server is the

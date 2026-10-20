@@ -1,6 +1,6 @@
 {
   "name": "colitu-extension",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "private": true,
   "description": "Colitu VPN browser extension for Chrome and Firefox",
   "license": "GPL-3.0-only",
