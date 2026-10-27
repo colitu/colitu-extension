@@ -17,9 +17,9 @@ the packages from the GitHub release of the same version
 
 ## Short description (≤ 132 characters, from `_locales`)
 
-- en: Protect your browser with Colitu: one click, servers in 10+ countries, WebRTC leak protection. Free 10 GB every month.
-- ru: Защитите браузер с Colitu: один клик, серверы в 10+ странах, защита от утечек WebRTC. 10 ГБ бесплатно каждый месяц.
-- tr: Tarayıcınızı Colitu ile koruyun: tek tık, 10+ ülkede sunucu, WebRTC sızıntı koruması. Her ay 10 GB ücretsiz.
+- en: Protect your browser with Colitu: one click, servers in 10+ countries, WebRTC leak protection. Free 1 GB every month.
+- ru: Защитите браузер с Colitu: один клик, серверы в 10+ странах, защита от утечек WebRTC. 1 ГБ бесплатно каждый месяц.
+- tr: Tarayıcınızı Colitu ile koruyun: tek tık, 10+ ülkede sunucu, WebRTC sızıntı koruması. Her ay 1 GB ücretsiz.
 
 ## Detailed description
 
@@ -31,7 +31,7 @@ Colitu VPN protects your browser in one click — no app to install.
 • Servers in more than 10 countries: Finland, Sweden, Estonia, the UK, France, Germany, Poland, Latvia, Canada, Türkiye and Russia.
 • No leaks around the proxy: if the server cannot be reached, pages do not open directly. WebRTC leak protection keeps video-call sites from seeing your real IP address.
 • Your rules: keep sites such as your bank outside the VPN, or send only the sites you choose through Colitu. Local network addresses always stay direct.
-• Same account as the Colitu apps for Windows, Android, Linux and iOS. The free plan includes 10 GB every month; Premium has no limit.
+• Same account as the Colitu apps for Windows, Android, Linux and iOS. The free plan includes 1 GB every month; Premium has no limit.
 • Open source (GPL-3.0): github.com/colitu/extension. No analytics, no ads, no access to page content.
 
 The extension protects browser traffic only. To protect every app on your device, use the Colitu app: colitu.com/download
@@ -44,7 +44,7 @@ Colitu VPN защищает браузер в один клик — без ус�
 • Серверы более чем в 10 странах: Финляндия, Швеция, Эстония, Великобритания, Франция, Германия, Польша, Латвия, Канада, Турция и Россия.
 • Без утечек в обход прокси: если сервер недоступен, страницы не открываются напрямую. Защита от утечек WebRTC скрывает ваш настоящий IP от сайтов видеозвонков.
 • Ваши правила: оставьте банк и другие сайты вне VPN или пускайте через Colitu только выбранные сайты. Локальные адреса сети всегда открываются напрямую.
-• Тот же аккаунт, что в приложениях Colitu для Windows, Android, Linux и iOS. Бесплатный тариф — 10 ГБ каждый месяц; на Premium ограничений нет.
+• Тот же аккаунт, что в приложениях Colitu для Windows, Android, Linux и iOS. Бесплатный тариф — 1 ГБ каждый месяц; на Premium ограничений нет.
 • Открытый код (GPL-3.0): github.com/colitu/extension. Без аналитики, без рекламы, без доступа к содержимому страниц.
 
 Расширение защищает только трафик браузера. Чтобы защитить все приложения на устройстве, установите приложение Colitu: colitu.com/download
@@ -57,7 +57,7 @@ Colitu VPN, uygulama kurmadan tarayıcınızı tek tıkla korur.
 • 10'dan fazla ülkede sunucu: Finlandiya, İsveç, Estonya, Birleşik Krallık, Fransa, Almanya, Polonya, Letonya, Kanada, Türkiye ve Rusya.
 • Proxy dışından sızıntı yok: sunucuya ulaşılamazsa sayfalar doğrudan açılmaz. WebRTC sızıntı koruması gerçek IP adresinizi görüntülü görüşme sitelerinden gizler.
 • Sizin kurallarınız: bankanız gibi siteleri VPN dışında tutun ya da yalnızca seçtiğiniz siteleri Colitu üzerinden açın. Yerel ağ adresleri her zaman doğrudan gider.
-• Windows, Android, Linux ve iOS'taki Colitu uygulamalarıyla aynı hesap. Ücretsiz plan her ay 10 GB içerir; Premium'da sınır yoktur.
+• Windows, Android, Linux ve iOS'taki Colitu uygulamalarıyla aynı hesap. Ücretsiz plan her ay 1 GB içerir; Premium'da sınır yoktur.
 • Açık kaynak (GPL-3.0): github.com/colitu/extension. Analiz yok, reklam yok, sayfa içeriğine erişim yok.
 
 Eklenti yalnızca tarayıcı trafiğini korur. Cihazdaki tüm uygulamaları korumak için Colitu uygulamasını kullanın: colitu.com/download
@@ -81,7 +81,7 @@ Eklenti yalnızca tarayıcı trafiğini korur. Cihazdaki tüm uygulamaları koru
 
 ## Firefox Add-ons
 
-**Summary (≤ 250):** Protect your browser with Colitu VPN: one click, servers in 10+ countries, WebRTC leak protection and site lists. Same account as the Colitu apps; 10 GB free every month. Open source.
+**Summary (≤ 250):** Protect your browser with Colitu VPN: one click, servers in 10+ countries, WebRTC leak protection and site lists. Same account as the Colitu apps; 1 GB free every month. Open source.
 
 **Data collection** (declared in the manifest): required authenticationInfo, personallyIdentifyingInfo, browsingActivity (traffic passes through Colitu servers while connected; it is not logged); optional technicalAndInteraction and locationInfo for "Usage statistics" (connection events and the country and provider of the user's network as a signed code; off until the user allows both; the server keeps daily totals, not linked to the account or device).
 

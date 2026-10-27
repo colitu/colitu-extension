@@ -4,6 +4,10 @@ All notable changes to the Colitu VPN browser extension. Release notes in
 Russian, English and Turkish are also at
 <https://docs.colitu.com/changelog/browser>.
 
+## 1.4.5
+
+- **Store and package texts:** the description now states the current free plan, 1 GB a month (it said 10 GB). No change to how the extension works.
+
 ## 1.4.4
 
 - **Connect from the server map on colitu.com:** the "Connect to this server" button on a server's card connects the extension to that country. The extension reacts only to a real click on colitu.com (a page script cannot trigger it), checks the sender again in the background and answers the page with the result only (no account data or tickets). Without the extension the button opens the download page.

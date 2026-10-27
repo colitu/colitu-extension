@@ -34,7 +34,7 @@ devices.
   Colitu server you chose. HTTPS sites stay encrypted end to end; the server
   sees which host names you connect to, as any VPN or proxy does. Servers keep
   no activity logs. The traffic volume per device is counted for the plan
-  limit (the free plan has 10 GB a month).
+  limit (the free plan has 1 GB a month).
 
 - **Usage statistics (setting “Usage statistics”):**
   connection events (server id, success or failure, a failure reason such as

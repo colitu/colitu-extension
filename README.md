@@ -51,7 +51,7 @@ run the app transports (VLESS Reality, XHTTP, Hysteria2). Instead:
    through `chrome.proxy`; Firefox answers `proxy.onRequest` per request.
    Both use the same routing function ([`src/lib/routing.js`](src/lib/routing.js)).
 4. The node verifies tickets offline, counts traffic per device and reports it
-   to the panel, which counts it towards the plan (the free plan has 10 GB a
+   to the panel, which counts it towards the plan (the free plan has 1 GB a
    month) and tells the node to cut off ended plans and removed devices.
 
 The proxy chain has **no `DIRECT` fallback** for websites: if the server
