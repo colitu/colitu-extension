@@ -370,11 +370,15 @@ export function sanitizeServers(list) {
 
 export async function registerDevice() {
   const auth = await getAuth();
+  const key = await deviceKey();
   const device = await authorized("/devices/register", {
     method: "POST",
     noDevice: true,
     body: {
-      device_key: await deviceKey(),
+      device_key: key,
+      // The random installation key outlives sign-out, so it also serves as
+      // the installation fingerprint: one free account per installation.
+      hardware_id: key,
       name: `${browserName()} · ${osName() || "Browser"}`.slice(0, 100),
       platform: TARGET,
       app_version: version(),
